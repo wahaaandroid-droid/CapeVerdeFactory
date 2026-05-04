@@ -104,7 +104,7 @@ const BUILD_OPTIONS: BuildOption[] = [
   },
 ];
 
-type InteractionMode = 'build' | 'rotate' | 'move' | 'demolish';
+type InteractionMode = 'build' | 'move' | 'demolish';
 
 interface BuildButton {
   option: BuildOption;
@@ -158,8 +158,6 @@ export class GameScene extends Phaser.Scene {
     status: Phaser.GameObjects.Text;
     readyButton: Phaser.GameObjects.Rectangle;
     readyText: Phaser.GameObjects.Text;
-    modeButton: Phaser.GameObjects.Rectangle;
-    modeText: Phaser.GameObjects.Text;
     moveButton: Phaser.GameObjects.Rectangle;
     moveText: Phaser.GameObjects.Text;
     demolishButton: Phaser.GameObjects.Rectangle;
@@ -536,9 +534,7 @@ export class GameScene extends Phaser.Scene {
           return;
         }
 
-        if (this.mode === 'rotate') {
-          this.tryRotateExisting(pointer);
-        } else if (this.mode === 'move') {
+        if (this.mode === 'move') {
           this.tryMoveBuilding(pointer);
         } else if (this.mode === 'demolish') {
           this.tryDemolish(pointer);
@@ -578,6 +574,10 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (event.key.toLowerCase() === 'r') {
+        if (this.mode === 'build' && this.tryRotateHoveredBuilding()) {
+          return;
+        }
+
         this.direction = rotateDirection(this.direction);
         this.setStatus(`向き: ${this.directionLabel(this.direction)}`, 900);
       }
@@ -778,41 +778,13 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
-    const modeButton = this.add
-      .rectangle(118, 624, 178, 34, 0x243340, 1)
-      .setStrokeStyle(2, 0x7ddcff, 1)
-      .setDepth(102)
-      .setInteractive({ useHandCursor: true });
-    const modeText = this.add
-      .text(118, 624, '向き変更', {
-        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '15px',
-        color: '#ffffff',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setDepth(103);
-    modeButton.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _localX: number,
-        _localY: number,
-        event: Phaser.Types.Input.EventData,
-      ) => {
-        event.stopPropagation();
-        this.resumeAudio();
-        this.setMode(this.mode === 'rotate' ? 'build' : 'rotate');
-      },
-    );
-
     const moveButton = this.add
-      .rectangle(118, 666, 178, 34, 0x22343c, 1)
+      .rectangle(118, 624, 178, 34, 0x22343c, 1)
       .setStrokeStyle(2, 0x78f2d6, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const moveText = this.add
-      .text(118, 666, '移設モード', {
+      .text(118, 624, '移設モード', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '15px',
         color: '#ffffff',
@@ -835,12 +807,12 @@ export class GameScene extends Phaser.Scene {
     );
 
     const demolishButton = this.add
-      .rectangle(118, 708, 178, 34, 0x3a2a24, 1)
+      .rectangle(118, 666, 178, 34, 0x3a2a24, 1)
       .setStrokeStyle(2, 0xffa35c, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const demolishText = this.add
-      .text(118, 708, '解体モード', {
+      .text(118, 666, '解体モード', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '15px',
         color: '#ffffff',
@@ -869,13 +841,11 @@ export class GameScene extends Phaser.Scene {
       parts: this.addText(24, 142, '', 17, '#d6e3eb'),
       ore: this.addText(24, 172, '', 17, '#d6e3eb'),
       ammo: this.addText(118, 172, '', 17, '#ffb174'),
-      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  M:移設  X:解体', 14, '#fff3cc', true),
+      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き/施設上で向き変更  M:移設  X:解体', 14, '#fff3cc', true),
       selected: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 56, '', 13, '#e6eef4'),
       status: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 80, this.statusMessage, 14, '#fff0c4'),
       readyButton,
       readyText,
-      modeButton,
-      modeText,
       moveButton,
       moveText,
       demolishButton,
@@ -1034,27 +1004,37 @@ export class GameScene extends Phaser.Scene {
     this.setStatus(`${BUILDING_DEFS[this.selectedBuild].label}${shape}を建設`);
   }
 
-  private tryRotateExisting(pointer: Phaser.Input.Pointer): void {
-    if (this.wave.state !== 'preparation') {
-      this.setStatus('戦闘中は向きを変更できません');
-      return;
+  private tryRotateHoveredBuilding(): boolean {
+    const pointer = this.input.activePointer;
+    if (!this.isPointerInWorldView(pointer)) {
+      return false;
     }
 
     const cell = this.pointerToCell(pointer);
     if (!cell) {
-      return;
+      return false;
     }
 
     const building = this.grid.getBuilding(cell);
-    if (!building?.alive || building.type === 'core') {
-      this.setStatus('向きを変える施設をクリック');
-      return;
+    if (!building?.alive) {
+      return false;
+    }
+
+    if (this.wave.state !== 'preparation') {
+      this.setStatus('戦闘中は向きを変更できません');
+      return true;
+    }
+
+    if (building.type === 'core') {
+      this.setStatus('コアの向きは変更できません');
+      return true;
     }
 
     building.setDirection(rotateDirection(building.direction));
     this.factory.refreshAutoConveyorsAround(building.cell);
     this.direction = building.direction;
     this.setStatus(`${BUILDING_DEFS[building.type].label}の向き: ${this.directionLabel(building.direction)}`);
+    return true;
   }
 
   private tryMoveBuilding(pointer: Phaser.Input.Pointer): void {
@@ -1160,8 +1140,6 @@ export class GameScene extends Phaser.Scene {
 
   private cycleMode(): void {
     if (this.mode === 'build') {
-      this.setMode('rotate');
-    } else if (this.mode === 'rotate') {
       this.setMode('move');
     } else if (this.mode === 'move') {
       this.setMode('demolish');
@@ -1182,7 +1160,6 @@ export class GameScene extends Phaser.Scene {
 
     const labels: Record<InteractionMode, string> = {
       build: '建設モード',
-      rotate: '向き変更モード',
       move: '移設モード',
       demolish: '解体モード',
     };
@@ -1233,7 +1210,7 @@ export class GameScene extends Phaser.Scene {
     const x = MAP_ORIGIN_X + cell.x * TILE_SIZE;
     const y = MAP_ORIGIN_Y + cell.y * TILE_SIZE;
 
-    if (this.mode === 'rotate' || this.mode === 'move' || this.mode === 'demolish') {
+    if (this.mode === 'move' || this.mode === 'demolish') {
       const building = this.grid.getBuilding(cell);
       const moving = this.mode === 'move' && this.movingBuilding !== null;
       const destinationIsValid =
@@ -1244,15 +1221,9 @@ export class GameScene extends Phaser.Scene {
         (this.movingBuilding!.type !== 'miner' || this.grid.getTerrain(cell) === 'resource');
       const selectableIsValid =
         this.wave.state === 'preparation' &&
-        Boolean(building?.alive) &&
-        (this.mode !== 'rotate' || building?.type !== 'core');
+        Boolean(building?.alive);
       const valid = moving ? destinationIsValid : selectableIsValid;
-      const color =
-        this.mode === 'rotate'
-          ? 0x7ddcff
-          : this.mode === 'move'
-            ? 0x78f2d6
-            : 0xffa35c;
+      const color = this.mode === 'move' ? 0x78f2d6 : 0xffa35c;
       this.preview.lineStyle(2, valid ? color : 0xff4d3d, 0.95);
       this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
 
@@ -1264,13 +1235,20 @@ export class GameScene extends Phaser.Scene {
         this.preview.lineStyle(2, 0x78f2d6, 0.8);
         this.preview.strokeCircle(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE * 0.25);
       }
+      return;
+    }
 
-      if (this.mode === 'rotate' && building?.alive && building.type === 'turret') {
+    const existing = this.grid.getBuilding(cell);
+    if (existing?.alive) {
+      const canRotate = existing.type !== 'core' && this.wave.state === 'preparation';
+      this.preview.lineStyle(2, canRotate ? 0x7ddcff : 0xff4d3d, 0.95);
+      this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+      if (existing.type === 'turret') {
         this.drawTurretRange(
           x + TILE_SIZE / 2,
           y + TILE_SIZE / 2,
-          building.direction,
-          valid,
+          existing.direction,
+          canRotate,
         );
       }
       return;
@@ -1279,7 +1257,6 @@ export class GameScene extends Phaser.Scene {
     const valid =
       this.wave.state === 'preparation' &&
       this.grid.isBuildable(cell) &&
-      !this.grid.getBuilding(cell)?.alive &&
       (this.selectedBuild !== 'miner' || this.grid.getTerrain(cell) === 'resource') &&
       this.parts >= BUILDING_DEFS[this.selectedBuild].cost;
     this.preview.lineStyle(2, valid ? 0x7dff9f : 0xff4d3d, 0.95);
@@ -1335,9 +1312,6 @@ export class GameScene extends Phaser.Scene {
       .setFillStyle(this.wave.state === 'preparation' ? 0x1f4c3a : 0x24303a, 1)
       .setStrokeStyle(2, this.wave.state === 'preparation' ? 0x79f0a4 : 0x57606a, 1);
     this.ui.readyText.setAlpha(this.wave.state === 'preparation' ? 1 : 0.45);
-    this.ui.modeButton
-      .setFillStyle(this.mode === 'rotate' ? 0x31506a : 0x243340, 1)
-      .setStrokeStyle(2, this.mode === 'rotate' ? 0xffd16a : 0x7ddcff, 1);
     this.ui.moveButton
       .setFillStyle(this.mode === 'move' ? 0x235d58 : 0x22343c, 1)
       .setStrokeStyle(2, this.mode === 'move' ? 0xffd16a : 0x78f2d6, 1);
@@ -1453,9 +1427,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   private modeLabel(mode: InteractionMode): string {
-    if (mode === 'rotate') {
-      return '向き変更';
-    }
     if (mode === 'move') {
       return '移設';
     }
