@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import recipeBoardUrl from '../../assets/images/recipe-board-generated.png';
 import generatedConveyorsUrl from '../../assets/sprites/generated-conveyors.png';
 import generatedSpritesUrl from '../../assets/sprites/generated-sprites.png';
 import { Bullet } from './entities/Bullet';
@@ -49,6 +50,14 @@ interface BuildOption {
   label: string;
   detail: string;
   iconKey: string;
+}
+
+type BuildGroupId = 'basic' | 'logistics' | 'production' | 'defense';
+
+interface BuildGroupDefinition {
+  id: BuildGroupId;
+  label: string;
+  optionIds: string[];
 }
 
 const BUILD_OPTIONS: BuildOption[] = [
@@ -183,6 +192,121 @@ const BUILD_OPTIONS: BuildOption[] = [
   },
 ];
 
+const BUILD_GROUPS: BuildGroupDefinition[] = [
+  {
+    id: 'basic',
+    label: '基本施設',
+    optionIds: ['miner', 'wall'],
+  },
+  {
+    id: 'logistics',
+    label: '搬送ライン',
+    optionIds: ['conveyor-straight', 'conveyor-junction-three', 'conveyor-junction-four'],
+  },
+  {
+    id: 'production',
+    label: '加工工場',
+    optionIds: [
+      'ammoFactory',
+      'metalPlateFactory',
+      'plasticFactory',
+      'fuelFactory',
+      'specialAmmoFactory',
+      'missileFactory',
+      'droneFactory',
+    ],
+  },
+  {
+    id: 'defense',
+    label: '防衛兵器',
+    optionIds: [
+      'turret',
+      'sniperTurret',
+      'cannonTurret',
+      'empTurret',
+      'missileTurret',
+      'droneTower',
+    ],
+  },
+];
+
+const BUILD_OPTION_BY_ID = new Map(BUILD_OPTIONS.map((option) => [option.id, option]));
+const BUILD_MENU_START_Y = 306;
+const BUILD_MENU_ROW_HEIGHT = 31;
+
+const RECIPE_ROWS = [
+  {
+    building: '採掘機',
+    output: '鉄 / 銅 / 原油',
+    recipe: '資源マスから採掘し、向きの方向へ排出',
+  },
+  {
+    building: '弾薬工場',
+    output: '弾',
+    recipe: '鉄 1 -> 弾 1',
+  },
+  {
+    building: '金属板工場',
+    output: '鉄板 / 銅板 / ワイヤー',
+    recipe: '鉄 1 -> 鉄板 1 / 銅 1 -> 銅板 or 線',
+  },
+  {
+    building: 'プラスチック工場',
+    output: 'プラスチック',
+    recipe: '原油 1 -> プラスチック 1',
+  },
+  {
+    building: '燃料工場',
+    output: '燃料',
+    recipe: '原油 1 -> 燃料 1',
+  },
+  {
+    building: '特殊弾工場',
+    output: '強化弾 / 焼夷弾 / EMP弾',
+    recipe: '鉄板+銅板 / 鉄板+燃料 / 線+樹脂',
+  },
+  {
+    building: 'ミサイル工場',
+    output: 'ミサイル',
+    recipe: '鉄板 2 + 線 2 + 燃料 4 -> ミサイル',
+  },
+  {
+    building: 'ドローン工場',
+    output: 'ドローン',
+    recipe: '鉄板 5 + 線 5 + 樹脂 5 -> ドローン',
+  },
+  {
+    building: 'タレット',
+    output: '通常射撃',
+    recipe: '弾を消費して近距離を連射',
+  },
+  {
+    building: 'スナイパー',
+    output: '長射程射撃',
+    recipe: '強化弾のみ使用。高威力だが低速',
+  },
+  {
+    building: '大型砲台',
+    output: '範囲爆撃',
+    recipe: '焼夷弾のみ使用。着弾地点を範囲攻撃',
+  },
+  {
+    building: '電磁砲台',
+    output: 'EMP停止',
+    recipe: 'EMP弾のみ使用。範囲内の敵を3秒停止',
+  },
+  {
+    building: 'ミサイル砲台',
+    output: '超長射程爆撃',
+    recipe: 'ミサイルのみ使用。高威力の範囲攻撃',
+  },
+  {
+    building: 'ドローン司令塔',
+    output: '戦闘ドローン',
+    recipe: 'ドローンを消費して追撃ユニットを発進',
+  },
+];
+
 type WeaponBuildingType =
   | 'turret'
   | 'sniperTurret'
@@ -273,6 +397,9 @@ export class GameScene extends Phaser.Scene {
   private readonly drones: CombatDrone[] = [];
   private preview!: Phaser.GameObjects.Graphics;
   private buildButtons: BuildButton[] = [];
+  private readonly buildMenuObjects: Phaser.GameObjects.GameObject[] = [];
+  private readonly expandedBuildGroups = new Set<BuildGroupId>();
+  private recipeOverlay?: Phaser.GameObjects.Container;
   private worldCamera!: Phaser.Cameras.Scene2D.Camera;
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private readonly worldObjects = new Set<Phaser.GameObjects.GameObject>();
@@ -299,6 +426,8 @@ export class GameScene extends Phaser.Scene {
     readyText: Phaser.GameObjects.Text;
     repairButton: Phaser.GameObjects.Rectangle;
     repairText: Phaser.GameObjects.Text;
+    recipeButton: Phaser.GameObjects.Rectangle;
+    recipeText: Phaser.GameObjects.Text;
     moveButton: Phaser.GameObjects.Rectangle;
     moveText: Phaser.GameObjects.Text;
     demolishButton: Phaser.GameObjects.Rectangle;
@@ -318,6 +447,7 @@ export class GameScene extends Phaser.Scene {
       frameWidth: 128,
       frameHeight: 128,
     });
+    this.load.image('recipe-board-generated', recipeBoardUrl);
   }
 
   create(): void {
@@ -953,6 +1083,34 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
+    const recipeButton = this.add
+      .rectangle(WORLD_VIEW_X + WORLD_VIEW_WIDTH - 260, lowerPanelY + 70, 148, 28, 0x223242, 1)
+      .setStrokeStyle(2, 0x7ddcff, 1)
+      .setDepth(102)
+      .setInteractive({ useHandCursor: true });
+    const recipeText = this.add
+      .text(WORLD_VIEW_X + WORLD_VIEW_WIDTH - 260, lowerPanelY + 70, 'レシピ一覧', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '15px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(103);
+    recipeButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        this.resumeAudio();
+        this.toggleRecipeOverlay();
+      },
+    );
+
     const moveButton = this.add
       .rectangle(WORLD_VIEW_X + WORLD_VIEW_WIDTH - 102, lowerPanelY + 35, 148, 28, 0x22343c, 1)
       .setStrokeStyle(2, 0x78f2d6, 1)
@@ -1009,6 +1167,11 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
+    const selectedText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 54, '', 12, '#e6eef4');
+    selectedText.setWordWrapWidth(WORLD_VIEW_WIDTH - 340);
+    const statusText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 82, this.statusMessage, 13, '#fff0c4');
+    statusText.setWordWrapWidth(WORLD_VIEW_WIDTH - 340);
+
     this.ui = {
       wave: this.addText(24, 36, '', 21, '#fff3cc', true),
       phase: this.addText(24, 70, '', 18, '#e6eef4'),
@@ -1016,13 +1179,15 @@ export class GameScene extends Phaser.Scene {
       parts: this.addText(24, 142, '', 17, '#d6e3eb'),
       ore: this.addText(24, 172, '', 15, '#d6e3eb'),
       ammo: this.addText(24, 198, '', 13, '#ffb174'),
-      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き/施設上で向き変更  M:移設  X:解体', 14, '#fff3cc', true),
-      selected: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 56, '', 13, '#e6eef4'),
-      status: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 80, this.statusMessage, 14, '#fff0c4'),
+      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  M:移設  X:解体', 14, '#fff3cc', true),
+      selected: selectedText,
+      status: statusText,
       readyButton,
       readyText,
       repairButton,
       repairText,
+      recipeButton,
+      recipeText,
       moveButton,
       moveText,
       demolishButton,
@@ -1037,22 +1202,28 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createBuildMenu(): void {
-    BUILD_OPTIONS.forEach((option, index) => {
-      const y = 292 + index * 25;
-      const box = this.add
-        .rectangle(118, y, 178, 23, 0x151a20, 1)
-        .setOrigin(0.5)
-        .setStrokeStyle(2, this.isBuildOptionSelected(option) ? 0xffd16a : 0x55606a, 1)
-        .setDepth(100)
-        .setInteractive({ useHandCursor: true });
-      this.add
-        .sprite(40, y, option.iconKey)
-        .setDisplaySize(18, 18)
-        .setDepth(101);
-      this.addText(56, y - 11, option.label, 9, '#e8edf2', true);
-      this.addText(56, y, `${option.detail} / ${this.buildOptionCost(option)}`, 7, '#cfd8df');
+    this.clearBuildMenu();
+    let row = 0;
 
-      box.on(
+    for (const group of BUILD_GROUPS) {
+      const y = BUILD_MENU_START_Y + row * BUILD_MENU_ROW_HEIGHT;
+      const expanded = this.expandedBuildGroups.has(group.id);
+      const headerBox = this.trackBuildMenuObject(
+          this.add
+          .rectangle(118, y, 178, 25, 0x202a33, 1)
+          .setOrigin(0.5)
+          .setStrokeStyle(2, expanded ? 0xffd16a : 0x56616b, 1)
+          .setDepth(100)
+          .setInteractive({ useHandCursor: true }),
+      );
+      this.trackBuildMenuObject(
+        this.addText(34, y - 10, `${expanded ? '-' : '+'} ${group.label}`, 12, '#fff3cc', true),
+      );
+      this.trackBuildMenuObject(
+        this.addText(180, y - 8, `${group.optionIds.length}`, 10, '#9fb3c3', true),
+      );
+
+      headerBox.on(
         'pointerdown',
         (
           _pointer: Phaser.Input.Pointer,
@@ -1062,14 +1233,88 @@ export class GameScene extends Phaser.Scene {
         ) => {
           event.stopPropagation();
           this.resumeAudio();
-          this.selectBuildOption(option);
+          this.toggleBuildGroup(group.id);
         },
       );
-      box.on('pointerover', () => box.setFillStyle(0x22303a, 1));
-      box.on('pointerout', () => box.setFillStyle(0x151a20, 1));
+      headerBox.on('pointerover', () => headerBox.setFillStyle(0x2a3640, 1));
+      headerBox.on('pointerout', () => headerBox.setFillStyle(0x202a33, 1));
+      row += 1;
 
-      this.buildButtons.push({ option, box });
-    });
+      if (!expanded) {
+        continue;
+      }
+
+      for (const optionId of group.optionIds) {
+        const option = BUILD_OPTION_BY_ID.get(optionId);
+        if (!option) {
+          continue;
+        }
+
+        const optionY = BUILD_MENU_START_Y + row * BUILD_MENU_ROW_HEIGHT;
+        const box = this.trackBuildMenuObject(
+          this.add
+            .rectangle(118, optionY, 178, 27, 0x151a20, 1)
+            .setOrigin(0.5)
+            .setStrokeStyle(2, this.isBuildOptionSelected(option) ? 0xffd16a : 0x55606a, 1)
+            .setDepth(100)
+            .setInteractive({ useHandCursor: true }),
+        );
+        this.trackBuildMenuObject(
+          this.add.sprite(42, optionY, option.iconKey).setDisplaySize(21, 21).setDepth(101),
+        );
+        this.trackBuildMenuObject(
+          this.addText(56, optionY - 12, option.label, 10, '#e8edf2', true),
+        );
+        this.trackBuildMenuObject(
+          this.addText(56, optionY + 1, `${option.detail} / 建材${this.buildOptionCost(option)}`, 8, '#cfd8df'),
+        );
+
+        box.on(
+          'pointerdown',
+          (
+            _pointer: Phaser.Input.Pointer,
+            _localX: number,
+            _localY: number,
+            event: Phaser.Types.Input.EventData,
+          ) => {
+            event.stopPropagation();
+            this.resumeAudio();
+            this.selectBuildOption(option);
+          },
+        );
+        box.on('pointerover', () => box.setFillStyle(0x22303a, 1));
+        box.on('pointerout', () => box.setFillStyle(0x151a20, 1));
+
+        this.buildButtons.push({ option, box });
+        row += 1;
+      }
+    }
+  }
+
+  private trackBuildMenuObject<T extends Phaser.GameObjects.GameObject>(object: T): T {
+    this.buildMenuObjects.push(object);
+    this.registerUiObject(object);
+    return object;
+  }
+
+  private clearBuildMenu(): void {
+    this.buildButtons = [];
+    for (const object of this.buildMenuObjects.splice(0)) {
+      this.uiObjects.delete(object);
+      this.worldObjects.delete(object);
+      object.destroy();
+    }
+  }
+
+  private toggleBuildGroup(groupId: BuildGroupId): void {
+    if (this.expandedBuildGroups.has(groupId)) {
+      this.expandedBuildGroups.delete(groupId);
+    } else {
+      this.expandedBuildGroups.clear();
+      this.expandedBuildGroups.add(groupId);
+    }
+
+    this.createBuildMenu();
   }
 
   private updateTurrets(time: number): void {
@@ -1442,6 +1687,14 @@ export class GameScene extends Phaser.Scene {
     return this.buildCost(option.type, option.conveyorVariant ?? 'straight');
   }
 
+  private selectedBuildDescription(): string {
+    if (this.selectedBuild === 'conveyor') {
+      return CONVEYOR_DEFS[this.selectedConveyorVariant].description;
+    }
+
+    return BUILDING_DEFS[this.selectedBuild].description;
+  }
+
   private buildCost(type: BuildingType, conveyorVariant: ConveyorVariant = 'straight'): number {
     if (type === 'conveyor') {
       return CONVEYOR_DEFS[conveyorVariant].cost;
@@ -1665,9 +1918,9 @@ export class GameScene extends Phaser.Scene {
         ? CONVEYOR_DEFS[this.selectedConveyorVariant].label
         : BUILDING_DEFS[this.selectedBuild].label;
     this.ui.selected.setText(
-      `モード:${this.modeLabel(this.mode)}  建設:${buildLabel}  向き:${this.directionLabel(
+      `モード:${this.modeLabel(this.mode)}  選択:${buildLabel}  向き:${this.directionLabel(
         this.direction,
-      )}  曲がりは自動`,
+      )}  機能:${this.selectedBuildDescription()}`,
     );
     this.ui.readyButton
       .setFillStyle(this.wave.state === 'preparation' ? 0x1f4c3a : 0x24303a, 1)
@@ -1682,6 +1935,9 @@ export class GameScene extends Phaser.Scene {
     this.ui.repairText
       .setText(repairCount > 0 ? `一括修理 ${repairCost}` : '修理不要')
       .setAlpha(this.wave.state === 'preparation' ? 1 : 0.45);
+    this.ui.recipeButton
+      .setFillStyle(this.recipeOverlay ? 0x1c4b5a : 0x223242, 1)
+      .setStrokeStyle(2, this.recipeOverlay ? 0xffd16a : 0x7ddcff, 1);
     this.ui.moveButton
       .setFillStyle(this.mode === 'move' ? 0x235d58 : 0x22343c, 1)
       .setStrokeStyle(2, this.mode === 'move' ? 0xffd16a : 0x78f2d6, 1);
@@ -1715,6 +1971,129 @@ export class GameScene extends Phaser.Scene {
     this.gameEnded = true;
     this.wave.stop();
     this.showEndOverlay('GAME OVER', 'コアが破壊された');
+  }
+
+  private toggleRecipeOverlay(): void {
+    if (this.recipeOverlay) {
+      this.hideRecipeOverlay();
+      return;
+    }
+
+    this.showRecipeOverlay();
+  }
+
+  private showRecipeOverlay(): void {
+    if (this.recipeOverlay) {
+      return;
+    }
+
+    const container = this.add.container(0, 0).setDepth(245);
+    const shade = this.add
+      .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x02050a, 0.78)
+      .setOrigin(0)
+      .setInteractive({ useHandCursor: true });
+    const board = this.add
+      .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'recipe-board-generated')
+      .setDisplaySize(1030, 630)
+      .setAlpha(0.98)
+      .setInteractive({ useHandCursor: true });
+    const fallbackPanel = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1010, 600, 0x101820, 0.55)
+      .setStrokeStyle(2, 0xd9a85f, 0.95)
+      .setInteractive({ useHandCursor: true });
+    const title = this.add
+      .text(GAME_WIDTH / 2, 88, 'レシピ一覧', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '32px',
+        color: '#fff3cc',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    const closeHint = this.add
+      .text(GAME_WIDTH / 2, 122, 'クリックで閉じる', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '13px',
+        color: '#b7cad8',
+      })
+      .setOrigin(0.5);
+    const headers = [
+      this.add.text(112, 150, '建築物', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '14px',
+        color: '#7ddcff',
+        fontStyle: 'bold',
+      }),
+      this.add.text(218, 150, 'できること / レシピ', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '14px',
+        color: '#7ddcff',
+        fontStyle: 'bold',
+      }),
+      this.add.text(535, 150, '建築物', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '14px',
+        color: '#7ddcff',
+        fontStyle: 'bold',
+      }),
+      this.add.text(652, 150, 'できること / レシピ', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '14px',
+        color: '#7ddcff',
+        fontStyle: 'bold',
+      }),
+    ];
+
+    const texts: Phaser.GameObjects.Text[] = [];
+    RECIPE_ROWS.forEach((row, index) => {
+      const rightColumn = index >= 7;
+      const rowIndex = rightColumn ? index - 7 : index;
+      const x = rightColumn ? 535 : 112;
+      const detailX = rightColumn ? 652 : 218;
+      const detailWidth = rightColumn ? 250 : 260;
+      const y = 180 + rowIndex * 68;
+      const buildingFontSize = row.building.length >= 6 ? '12px' : '14px';
+      const buildingText = this.add.text(x, y, row.building, {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: buildingFontSize,
+        color: '#fff3cc',
+        fontStyle: 'bold',
+      });
+      const outputText = this.add.text(detailX, y - 2, row.output, {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '13px',
+        color: '#ffcf65',
+        fontStyle: 'bold',
+      });
+      const recipeText = this.add.text(detailX, y + 19, row.recipe, {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '12px',
+        color: '#dce8ef',
+        wordWrap: { width: detailWidth },
+      });
+      texts.push(buildingText, outputText, recipeText);
+    });
+
+    const close = (
+      _pointer: Phaser.Input.Pointer,
+      _localX: number,
+      _localY: number,
+      event: Phaser.Types.Input.EventData,
+    ) => {
+      event.stopPropagation();
+      this.hideRecipeOverlay();
+    };
+    shade.on('pointerdown', close);
+    board.on('pointerdown', close);
+    fallbackPanel.on('pointerdown', close);
+
+    container.add([shade, board, fallbackPanel, title, closeHint, ...headers, ...texts]);
+    this.recipeOverlay = container;
+    this.registerUiObject(container);
+  }
+
+  private hideRecipeOverlay(): void {
+    this.recipeOverlay?.destroy();
+    this.recipeOverlay = undefined;
   }
 
   private showEndOverlay(title: string, body: string): void {
