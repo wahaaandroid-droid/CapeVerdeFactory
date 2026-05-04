@@ -63,12 +63,14 @@ export class Building {
       .setScale(TILE_SIZE / 30)
       .setVisible(false);
     this.stockText = scene.add
-      .text(0, TILE_SIZE / 2 + 2, '', {
+      .text(0, TILE_SIZE / 2 - 14, '', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '11px',
+        fontSize: '12px',
         color: '#f5f1df',
-        backgroundColor: '#111820',
-        padding: { x: 1, y: 0 },
+        backgroundColor: '#05080c',
+        padding: { x: 3, y: 1 },
+        align: 'center',
+        lineSpacing: -2,
       })
       .setOrigin(0.5, 0)
       .setVisible(false);
@@ -217,7 +219,7 @@ export class Building {
       parts.push(`弾${this.ammoStored}`);
     }
 
-    this.stockText.setText(parts.join(' '));
+    this.stockText.setText(parts.join('\n'));
     this.stockText.setVisible(this.alive && parts.length > 0);
   }
 

@@ -43,7 +43,7 @@ const BUILD_ORDER: BuildableType[] = [
   'turret',
 ];
 
-type InteractionMode = 'build' | 'rotate';
+type InteractionMode = 'build' | 'rotate' | 'demolish';
 
 interface BuildButton {
   type: BuildableType;
@@ -82,6 +82,7 @@ export class GameScene extends Phaser.Scene {
   private gameEnded = false;
   private statusMessage = '準備フェーズでラインを組み、準備完了で戦闘開始';
   private statusUntil = 0;
+  private audioContext?: AudioContext;
   private ui!: {
     wave: Phaser.GameObjects.Text;
     phase: Phaser.GameObjects.Text;
@@ -96,6 +97,8 @@ export class GameScene extends Phaser.Scene {
     readyText: Phaser.GameObjects.Text;
     modeButton: Phaser.GameObjects.Rectangle;
     modeText: Phaser.GameObjects.Text;
+    demolishButton: Phaser.GameObjects.Rectangle;
+    demolishText: Phaser.GameObjects.Text;
   };
 
   constructor() {
@@ -438,6 +441,8 @@ export class GameScene extends Phaser.Scene {
     this.input.mouse?.disableContextMenu();
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      this.resumeAudio();
+
       if (this.gameEnded || this.wave.state === 'upgrade') {
         return;
       }
@@ -459,6 +464,8 @@ export class GameScene extends Phaser.Scene {
 
         if (this.mode === 'rotate') {
           this.tryRotateExisting(pointer);
+        } else if (this.mode === 'demolish') {
+          this.tryDemolish(pointer);
         } else {
           this.tryPlace(pointer);
         }
@@ -500,7 +507,11 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (event.key.toLowerCase() === 'q') {
-        this.toggleMode();
+        this.cycleMode();
+      }
+
+      if (event.key.toLowerCase() === 'x') {
+        this.setMode(this.mode === 'demolish' ? 'build' : 'demolish');
       }
 
       const number = Number(event.key);
@@ -656,14 +667,14 @@ export class GameScene extends Phaser.Scene {
   private createUi(): void {
     const lowerPanelY = WORLD_VIEW_Y + WORLD_VIEW_HEIGHT + 8;
 
-    this.drawPanel(8, 8, 224, 228, '防衛状況');
+    this.drawPanel(8, 8, 224, 242, '防衛状況');
     const readyButton = this.add
-      .rectangle(118, 207, 178, 34, 0x1f4c3a, 1)
+      .rectangle(118, 220, 178, 34, 0x1f4c3a, 1)
       .setStrokeStyle(2, 0x79f0a4, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const readyText = this.add
-      .text(118, 207, '準備完了', {
+      .text(118, 220, '準備完了', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '17px',
         color: '#ffffff',
@@ -680,6 +691,7 @@ export class GameScene extends Phaser.Scene {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation();
+        this.resumeAudio();
         if (this.wave.state === 'preparation') {
           this.wave.startCombat();
         }
@@ -687,12 +699,12 @@ export class GameScene extends Phaser.Scene {
     );
 
     const modeButton = this.add
-      .rectangle(118, 430, 178, 34, 0x243340, 1)
+      .rectangle(118, 560, 178, 34, 0x243340, 1)
       .setStrokeStyle(2, 0x7ddcff, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const modeText = this.add
-      .text(118, 430, '向き変更モード', {
+      .text(118, 560, '向き変更', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '15px',
         color: '#ffffff',
@@ -709,7 +721,36 @@ export class GameScene extends Phaser.Scene {
         event: Phaser.Types.Input.EventData,
       ) => {
         event.stopPropagation();
-        this.toggleMode();
+        this.resumeAudio();
+        this.setMode(this.mode === 'rotate' ? 'build' : 'rotate');
+      },
+    );
+
+    const demolishButton = this.add
+      .rectangle(118, 606, 178, 34, 0x3a2a24, 1)
+      .setStrokeStyle(2, 0xffa35c, 1)
+      .setDepth(102)
+      .setInteractive({ useHandCursor: true });
+    const demolishText = this.add
+      .text(118, 606, '解体モード', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '15px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(103);
+    demolishButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        this.resumeAudio();
+        this.setMode(this.mode === 'demolish' ? 'build' : 'demolish');
       },
     );
 
@@ -718,8 +759,8 @@ export class GameScene extends Phaser.Scene {
       phase: this.addText(24, 70, '', 18, '#e6eef4'),
       core: this.addText(24, 108, '', 18, '#7fdcff'),
       parts: this.addText(24, 142, '', 17, '#d6e3eb'),
-      ore: this.addText(24, 168, '', 17, '#d6e3eb'),
-      ammo: this.addText(118, 168, '', 17, '#ffb174'),
+      ore: this.addText(24, 172, '', 17, '#d6e3eb'),
+      ammo: this.addText(118, 172, '', 17, '#ffb174'),
       controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール: ズーム  ドラッグ: 移動  WASD/矢印: 移動', 15, '#fff3cc', true),
       selected: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 56, '', 14, '#e6eef4'),
       status: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 80, this.statusMessage, 14, '#fff0c4'),
@@ -727,9 +768,11 @@ export class GameScene extends Phaser.Scene {
       readyText,
       modeButton,
       modeText,
+      demolishButton,
+      demolishText,
     };
 
-    this.drawPanel(8, 248, 224, 206, '建設メニュー');
+    this.drawPanel(8, 260, 224, 386, '建設メニュー');
     this.createBuildMenu();
 
     this.drawPanel(WORLD_VIEW_X, lowerPanelY, WORLD_VIEW_WIDTH, 96, '操作ライン');
@@ -739,25 +782,19 @@ export class GameScene extends Phaser.Scene {
   private createBuildMenu(): void {
     BUILD_ORDER.forEach((type, index) => {
       const definition = BUILDING_DEFS[type];
-      const x = 26 + (index % 2) * 100;
-      const y = 270 + Math.floor(index / 2) * 40;
+      const y = 304 + index * 46;
       const box = this.add
-        .rectangle(x + 40, y + 14, 86, 32, 0x151a20, 1)
+        .rectangle(118, y, 178, 40, 0x151a20, 1)
         .setOrigin(0.5)
         .setStrokeStyle(2, type === this.selectedBuild ? 0xffd16a : 0x55606a, 1)
         .setDepth(100)
         .setInteractive({ useHandCursor: true });
-      const icon = this.add
-        .sprite(x + 10, y + 14, `building-${type}`)
-        .setDisplaySize(24, 24)
+      this.add
+        .sprite(42, y, `building-${type}`)
+        .setDisplaySize(30, 30)
         .setDepth(101);
-      const label = this.addText(
-        x + 26,
-        y + 5,
-        `${definition.label}\n${definition.cost}`,
-        11,
-        '#e8edf2',
-      );
+      this.addText(66, y - 14, definition.label, 13, '#e8edf2', true);
+      this.addText(66, y + 5, `建材 ${definition.cost}`, 12, '#cfd8df');
 
       box.on(
         'pointerdown',
@@ -768,6 +805,7 @@ export class GameScene extends Phaser.Scene {
           event: Phaser.Types.Input.EventData,
         ) => {
           event.stopPropagation();
+          this.resumeAudio();
           this.selectBuild(type);
         },
       );
@@ -802,6 +840,7 @@ export class GameScene extends Phaser.Scene {
       turret.nextFireAt = time + 560;
       turret.ammoStored -= 1;
       turret.flash(0xffe0a3);
+      this.playTurretShotSound();
       const bullet = this.bullets.find((candidate) => !candidate.active) ?? this.addBullet();
       const position = turret.getWorldPosition();
       bullet.fire(position.x, position.y, target, this.modifiers.turretDamage);
@@ -895,18 +934,63 @@ export class GameScene extends Phaser.Scene {
     this.setStatus(`${BUILDING_DEFS[building.type].label}の向き: ${this.directionLabel(building.direction)}`);
   }
 
+  private tryDemolish(pointer: Phaser.Input.Pointer): void {
+    if (this.wave.state !== 'preparation') {
+      this.setStatus('戦闘中は解体できません');
+      return;
+    }
+
+    const cell = this.pointerToCell(pointer);
+    if (!cell) {
+      return;
+    }
+
+    const building = this.grid.getBuilding(cell);
+    if (!building?.alive || building.type === 'core') {
+      this.setStatus('解体する施設をクリック');
+      return;
+    }
+
+    const refund = BUILDING_DEFS[building.type].cost;
+    const position = building.getWorldPosition();
+    this.parts += refund;
+    this.factory.removeBuilding(building);
+    this.floatText(position, `+${refund}`, 0xffd27a);
+    this.setStatus(`${BUILDING_DEFS[building.type].label}を解体`);
+  }
+
   private selectBuild(type: BuildableType): void {
     this.selectedBuild = type;
-    this.mode = 'build';
+    this.setMode('build', false);
     this.setStatus(`${BUILDING_DEFS[type].label}を選択`, 900);
     this.buildButtons.forEach(({ type: buttonType, box }) => {
       box.setStrokeStyle(2, buttonType === type ? 0xffd16a : 0x55606a, 1);
     });
   }
 
-  private toggleMode(): void {
-    this.mode = this.mode === 'build' ? 'rotate' : 'build';
-    this.setStatus(this.mode === 'build' ? '建設モード' : '向き変更モード');
+  private cycleMode(): void {
+    if (this.mode === 'build') {
+      this.setMode('rotate');
+    } else if (this.mode === 'rotate') {
+      this.setMode('demolish');
+    } else {
+      this.setMode('build');
+    }
+  }
+
+  private setMode(mode: InteractionMode, announce = true): void {
+    this.mode = mode;
+
+    if (!announce) {
+      return;
+    }
+
+    const labels: Record<InteractionMode, string> = {
+      build: '建設モード',
+      rotate: '向き変更モード',
+      demolish: '解体モード',
+    };
+    this.setStatus(labels[mode]);
   }
 
   private updatePreview(): void {
@@ -924,14 +1008,21 @@ export class GameScene extends Phaser.Scene {
     const x = MAP_ORIGIN_X + cell.x * TILE_SIZE;
     const y = MAP_ORIGIN_Y + cell.y * TILE_SIZE;
 
-    if (this.mode === 'rotate') {
+    if (this.mode === 'rotate' || this.mode === 'demolish') {
       const building = this.grid.getBuilding(cell);
       const valid =
         this.wave.state === 'preparation' &&
         Boolean(building?.alive) &&
         building?.type !== 'core';
-      this.preview.lineStyle(2, valid ? 0x7ddcff : 0xff4d3d, 0.95);
+      const color = this.mode === 'rotate' ? 0x7ddcff : 0xffa35c;
+      this.preview.lineStyle(2, valid ? color : 0xff4d3d, 0.95);
       this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+
+      if (this.mode === 'demolish' && valid) {
+        this.preview.lineStyle(3, 0xffa35c, 0.95);
+        this.preview.lineBetween(x + 10, y + 10, x + TILE_SIZE - 10, y + TILE_SIZE - 10);
+        this.preview.lineBetween(x + TILE_SIZE - 10, y + 10, x + 10, y + TILE_SIZE - 10);
+      }
       return;
     }
 
@@ -976,9 +1067,9 @@ export class GameScene extends Phaser.Scene {
     this.ui.ore.setText(`鉄 ${this.factory.oreInNetwork()}`);
     this.ui.ammo.setText(`弾 ${this.factory.ammoInNetwork()}`);
     this.ui.selected.setText(
-      `モード: ${this.mode === 'build' ? '建設' : '向き変更'}  選択: ${BUILDING_DEFS[this.selectedBuild].label}  向き: ${this.directionLabel(
+      `モード: ${this.modeLabel(this.mode)}  選択: ${BUILDING_DEFS[this.selectedBuild].label}  向き: ${this.directionLabel(
         this.direction,
-      )}  Rで向き / Qでモード`,
+      )}  R:向き / Q:モード切替 / X:解体`,
     );
     this.ui.readyButton
       .setFillStyle(this.wave.state === 'preparation' ? 0x1f4c3a : 0x24303a, 1)
@@ -987,7 +1078,9 @@ export class GameScene extends Phaser.Scene {
     this.ui.modeButton
       .setFillStyle(this.mode === 'rotate' ? 0x31506a : 0x243340, 1)
       .setStrokeStyle(2, this.mode === 'rotate' ? 0xffd16a : 0x7ddcff, 1);
-    this.ui.modeText.setText(this.mode === 'build' ? '向き変更モード' : '建設モード');
+    this.ui.demolishButton
+      .setFillStyle(this.mode === 'demolish' ? 0x5a3424 : 0x3a2a24, 1)
+      .setStrokeStyle(2, this.mode === 'demolish' ? 0xffd16a : 0xffa35c, 1);
 
     if (this.statusUntil > 0 && time > this.statusUntil) {
       this.ui.status.setText('鉄を弾薬工場へ、弾をタレットへ実搬送する');
@@ -1094,5 +1187,67 @@ export class GameScene extends Phaser.Scene {
       return '下';
     }
     return '左';
+  }
+
+  private modeLabel(mode: InteractionMode): string {
+    if (mode === 'rotate') {
+      return '向き変更';
+    }
+    if (mode === 'demolish') {
+      return '解体';
+    }
+    return '建設';
+  }
+
+  private resumeAudio(): void {
+    const context = this.ensureAudioContext();
+    if (context?.state === 'suspended') {
+      void context.resume();
+    }
+  }
+
+  private playTurretShotSound(): void {
+    const context = this.ensureAudioContext();
+    if (!context || context.state === 'suspended') {
+      return;
+    }
+
+    const now = context.currentTime;
+    const oscillator = context.createOscillator();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+
+    oscillator.type = 'square';
+    oscillator.frequency.setValueAtTime(520, now);
+    oscillator.frequency.exponentialRampToValueAtTime(180, now + 0.08);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1600, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+
+    oscillator.connect(filter);
+    filter.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.11);
+  }
+
+  private ensureAudioContext(): AudioContext | null {
+    if (this.audioContext) {
+      return this.audioContext;
+    }
+
+    const windowWithAudio = window as Window & {
+      webkitAudioContext?: typeof AudioContext;
+    };
+    const AudioContextCtor = window.AudioContext ?? windowWithAudio.webkitAudioContext;
+
+    if (!AudioContextCtor) {
+      return null;
+    }
+
+    this.audioContext = new AudioContextCtor();
+    return this.audioContext;
   }
 }
