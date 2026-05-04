@@ -77,14 +77,6 @@ export const CONVEYOR_VARIANTS: ConveyorVariant[] = [
   'mergeThree',
 ];
 
-export const PLACEABLE_CONVEYOR_VARIANTS: ConveyorVariant[] = [
-  'straight',
-  'splitLeftRight',
-  'mergeLeftRight',
-  'splitThree',
-  'mergeThree',
-];
-
 export const DIRECTION_VECTORS: Record<Direction, Cell> = {
   up: { x: 0, y: -1 },
   right: { x: 1, y: 0 },
@@ -139,39 +131,39 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDefinition> = {
 
 export const CONVEYOR_DEFS: Record<ConveyorVariant, ConveyorVariantDefinition> = {
   straight: {
-    label: '直進',
+    label: 'コンベア直進',
     shortLabel: 'I',
-    description: '向きの方向へ搬送',
+    description: '向きの方向へ搬送。曲がりは周囲から自動判定',
   },
   curveDown: {
-    label: 'カーブ 左→下',
+    label: '自動カーブ 左→下',
     shortLabel: 'L↓',
     description: '左から入り下へ出る',
   },
   curveUp: {
-    label: 'カーブ 左→上',
+    label: '自動カーブ 左→上',
     shortLabel: 'L↑',
     description: '左から入り上へ出る',
   },
   splitLeftRight: {
-    label: 'T分岐 下→左右',
-    shortLabel: 'T分',
-    description: '1入力を左右へ分岐',
+    label: 'T分岐 1→2',
+    shortLabel: 'T 1→2',
+    description: '向き側が1入力。左右2方向へ分岐',
   },
   mergeLeftRight: {
-    label: 'T合流 左右→上',
-    shortLabel: 'T合',
-    description: '左右入力を1方向へ合流',
+    label: 'T合流 2→1',
+    shortLabel: 'T 2→1',
+    description: '左右2入力を向き側へ合流',
   },
   splitThree: {
-    label: '十字分岐 下→3方向',
-    shortLabel: '+分',
-    description: '1入力を3方向へ分岐',
+    label: '十字分岐 1→3',
+    shortLabel: '+ 1→3',
+    description: '向き側が1入力。残り3方向へ分岐',
   },
   mergeThree: {
-    label: '十字合流 3方向→上',
-    shortLabel: '+合',
-    description: '3入力を1方向へ合流',
+    label: '十字合流 3→1',
+    shortLabel: '+ 3→1',
+    description: '3方向入力を向き側へ合流',
   },
 };
 

@@ -12,6 +12,7 @@ import {
 import { GridSystem } from './GridSystem';
 
 const AUTO_CURVE_VARIANTS: ConveyorVariant[] = ['straight', 'curveDown', 'curveUp'];
+const CURVE_VARIANTS: ConveyorVariant[] = ['curveDown', 'curveUp'];
 
 export class FactorySystem {
   constructor(
@@ -290,7 +291,7 @@ export class FactorySystem {
     cell: Cell,
     desiredOutput: Direction,
   ): { direction: Direction; variant: ConveyorVariant } {
-    const incoming = this.findIncomingStraightConveyor(cell, desiredOutput);
+    const incoming = this.findIncomingSourceDirection(cell, desiredOutput);
     if (
       !incoming ||
       incoming === desiredOutput ||
@@ -305,7 +306,7 @@ export class FactorySystem {
     };
   }
 
-  private findIncomingStraightConveyor(
+  private findIncomingSourceDirection(
     cell: Cell,
     desiredOutput: Direction,
   ): Direction | null {
@@ -317,16 +318,12 @@ export class FactorySystem {
     for (const incoming of candidates) {
       const sourceCell = neighbor(cell, incoming);
       const source = this.grid.getBuilding(sourceCell);
-      if (
-        !source?.alive ||
-        source.type !== 'conveyor' ||
-        source.conveyorVariant !== 'straight'
-      ) {
+      if (!source?.alive) {
         continue;
       }
 
       const sourceToTarget = this.oppositeDirection(incoming);
-      if (this.outputDirections(source).includes(sourceToTarget)) {
+      if (this.outputDirectionsForBuilding(source).includes(sourceToTarget)) {
         return incoming;
       }
     }
@@ -338,7 +335,7 @@ export class FactorySystem {
     incoming: Direction,
     output: Direction,
   ): { direction: Direction; variant: ConveyorVariant } | null {
-    for (const variant of ['curveDown', 'curveUp'] as ConveyorVariant[]) {
+    for (const variant of CURVE_VARIANTS) {
       for (const direction of DIRECTIONS) {
         if (
           this.inputDirectionsFor(variant, direction).includes(incoming) &&
@@ -368,6 +365,18 @@ export class FactorySystem {
       return [...DIRECTIONS];
     }
 
+    if (variant === 'splitLeftRight' || variant === 'splitThree') {
+      return [direction];
+    }
+
+    if (variant === 'mergeLeftRight') {
+      return this.perpendicularDirections(direction);
+    }
+
+    if (variant === 'mergeThree') {
+      return DIRECTIONS.filter((candidate) => candidate !== direction);
+    }
+
     const baseInputs: Record<ConveyorVariant, Direction[]> = {
       straight: DIRECTIONS,
       curveDown: ['left'],
@@ -389,6 +398,18 @@ export class FactorySystem {
       return [direction];
     }
 
+    if (variant === 'splitLeftRight') {
+      return this.perpendicularDirections(direction);
+    }
+
+    if (variant === 'mergeLeftRight' || variant === 'mergeThree') {
+      return [direction];
+    }
+
+    if (variant === 'splitThree') {
+      return DIRECTIONS.filter((candidate) => candidate !== direction);
+    }
+
     const baseOutputs: Record<ConveyorVariant, Direction[]> = {
       straight: ['right'],
       curveDown: ['down'],
@@ -400,6 +421,30 @@ export class FactorySystem {
     };
 
     return this.rotateDirections(baseOutputs[variant], direction);
+  }
+
+  private outputDirectionsForBuilding(building: Building): Direction[] {
+    if (building.type === 'conveyor') {
+      return this.outputDirections(building);
+    }
+
+    if (
+      building.type === 'miner' ||
+      building.type === 'ammoFactory' ||
+      building.type === 'core'
+    ) {
+      return [building.direction];
+    }
+
+    return [];
+  }
+
+  private perpendicularDirections(direction: Direction): Direction[] {
+    if (direction === 'up' || direction === 'down') {
+      return ['left', 'right'];
+    }
+
+    return ['up', 'down'];
   }
 
   private rotateDirections(directions: Direction[], facing: Direction): Direction[] {

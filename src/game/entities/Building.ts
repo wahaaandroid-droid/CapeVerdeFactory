@@ -212,7 +212,7 @@ export class Building {
 
   private updateDirectionVisual(): void {
     if (this.type === 'conveyor' || this.type === 'turret') {
-      this.sprite.setAngle(DIRECTION_ANGLES[this.direction]);
+      this.sprite.setAngle(this.spriteAngle());
     }
 
     const angle = DIRECTION_ANGLES[this.direction];
@@ -234,6 +234,28 @@ export class Building {
     }
 
     return `conveyor-${this.conveyorVariant}`;
+  }
+
+  private spriteAngle(): number {
+    if (this.type !== 'conveyor') {
+      return DIRECTION_ANGLES[this.direction];
+    }
+
+    if (
+      this.conveyorVariant === 'splitLeftRight' ||
+      this.conveyorVariant === 'splitThree'
+    ) {
+      return DIRECTION_ANGLES[this.direction] - 90;
+    }
+
+    if (
+      this.conveyorVariant === 'mergeLeftRight' ||
+      this.conveyorVariant === 'mergeThree'
+    ) {
+      return DIRECTION_ANGLES[this.direction] + 90;
+    }
+
+    return DIRECTION_ANGLES[this.direction];
   }
 
   private itemMotionDirection(): Direction {

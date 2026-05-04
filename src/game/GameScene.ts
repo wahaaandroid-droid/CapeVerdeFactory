@@ -27,7 +27,6 @@ import {
   MAP_ORIGIN_X,
   MAP_ORIGIN_Y,
   MAP_WIDTH_PX,
-  PLACEABLE_CONVEYOR_VARIANTS,
   TILE_SIZE,
   UpgradeId,
   WORLD_VIEW_HEIGHT,
@@ -41,17 +40,83 @@ import {
 
 type BuildableType = Exclude<BuildingType, 'core'>;
 
-const BUILD_ORDER: BuildableType[] = [
-  'miner',
-  'conveyor',
-  'ammoFactory',
-  'turret',
+interface BuildOption {
+  id: string;
+  type: BuildableType;
+  conveyorVariant?: ConveyorVariant;
+  label: string;
+  detail: string;
+  iconKey: string;
+}
+
+const BUILD_OPTIONS: BuildOption[] = [
+  {
+    id: 'miner',
+    type: 'miner',
+    label: '採掘機',
+    detail: '資源から鉄を生成',
+    iconKey: 'building-miner',
+  },
+  {
+    id: 'conveyor-straight',
+    type: 'conveyor',
+    conveyorVariant: 'straight',
+    label: 'コンベア直進',
+    detail: '向きへ搬送・曲がり自動',
+    iconKey: 'building-conveyor',
+  },
+  {
+    id: 'conveyor-split-two',
+    type: 'conveyor',
+    conveyorVariant: 'splitLeftRight',
+    label: 'T分岐 1→2',
+    detail: '向き側が1入力',
+    iconKey: 'conveyor-splitLeftRight',
+  },
+  {
+    id: 'conveyor-merge-two',
+    type: 'conveyor',
+    conveyorVariant: 'mergeLeftRight',
+    label: 'T合流 2→1',
+    detail: '向き側が1出口',
+    iconKey: 'conveyor-mergeLeftRight',
+  },
+  {
+    id: 'conveyor-split-three',
+    type: 'conveyor',
+    conveyorVariant: 'splitThree',
+    label: '十字分岐 1→3',
+    detail: '向き側が1入力',
+    iconKey: 'conveyor-splitThree',
+  },
+  {
+    id: 'conveyor-merge-three',
+    type: 'conveyor',
+    conveyorVariant: 'mergeThree',
+    label: '十字合流 3→1',
+    detail: '向き側が1出口',
+    iconKey: 'conveyor-mergeThree',
+  },
+  {
+    id: 'ammoFactory',
+    type: 'ammoFactory',
+    label: '弾薬工場',
+    detail: '鉄を弾に変換',
+    iconKey: 'building-ammoFactory',
+  },
+  {
+    id: 'turret',
+    type: 'turret',
+    label: 'タレット',
+    detail: '弾を消費して攻撃',
+    iconKey: 'building-turret',
+  },
 ];
 
 type InteractionMode = 'build' | 'rotate' | 'move' | 'demolish';
 
 interface BuildButton {
-  type: BuildableType;
+  option: BuildOption;
   box: Phaser.GameObjects.Rectangle;
 }
 
@@ -61,7 +126,7 @@ export class GameScene extends Phaser.Scene {
   wave!: WaveSystem;
   upgrades!: UpgradeSystem;
   core!: Building;
-  parts = 360;
+  parts = 1000000;
   modifiers = {
     turretDamage: 34,
     turretRange: 125,
@@ -102,8 +167,6 @@ export class GameScene extends Phaser.Scene {
     status: Phaser.GameObjects.Text;
     readyButton: Phaser.GameObjects.Rectangle;
     readyText: Phaser.GameObjects.Text;
-    variantButton: Phaser.GameObjects.Rectangle;
-    variantText: Phaser.GameObjects.Text;
     modeButton: Phaser.GameObjects.Rectangle;
     modeText: Phaser.GameObjects.Text;
     moveButton: Phaser.GameObjects.Rectangle;
@@ -534,10 +597,6 @@ export class GameScene extends Phaser.Scene {
         this.cycleMode();
       }
 
-      if (event.key.toLowerCase() === 'c') {
-        this.cycleConveyorVariant();
-      }
-
       if (event.key.toLowerCase() === 'm') {
         this.setMode(this.mode === 'move' ? 'build' : 'move');
       }
@@ -547,8 +606,8 @@ export class GameScene extends Phaser.Scene {
       }
 
       const number = Number(event.key);
-      if (number >= 1 && number <= BUILD_ORDER.length) {
-        this.selectBuild(BUILD_ORDER[number - 1]);
+      if (number >= 1 && number <= BUILD_OPTIONS.length) {
+        this.selectBuildOption(BUILD_OPTIONS[number - 1]);
       }
     });
 
@@ -730,41 +789,13 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
-    const variantButton = this.add
-      .rectangle(118, 494, 178, 34, 0x1d2b32, 1)
-      .setStrokeStyle(2, 0xf5c331, 1)
-      .setDepth(102)
-      .setInteractive({ useHandCursor: true });
-    const variantText = this.add
-      .text(118, 494, '', {
-        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '13px',
-        color: '#ffffff',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setDepth(103);
-    variantButton.on(
-      'pointerdown',
-      (
-        _pointer: Phaser.Input.Pointer,
-        _localX: number,
-        _localY: number,
-        event: Phaser.Types.Input.EventData,
-      ) => {
-        event.stopPropagation();
-        this.resumeAudio();
-        this.cycleConveyorVariant();
-      },
-    );
-
     const modeButton = this.add
-      .rectangle(118, 538, 178, 34, 0x243340, 1)
+      .rectangle(118, 624, 178, 34, 0x243340, 1)
       .setStrokeStyle(2, 0x7ddcff, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const modeText = this.add
-      .text(118, 538, '向き変更', {
+      .text(118, 624, '向き変更', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '15px',
         color: '#ffffff',
@@ -787,12 +818,12 @@ export class GameScene extends Phaser.Scene {
     );
 
     const moveButton = this.add
-      .rectangle(118, 580, 178, 34, 0x22343c, 1)
+      .rectangle(118, 666, 178, 34, 0x22343c, 1)
       .setStrokeStyle(2, 0x78f2d6, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const moveText = this.add
-      .text(118, 580, '移設モード', {
+      .text(118, 666, '移設モード', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '15px',
         color: '#ffffff',
@@ -815,12 +846,12 @@ export class GameScene extends Phaser.Scene {
     );
 
     const demolishButton = this.add
-      .rectangle(118, 622, 178, 34, 0x3a2a24, 1)
+      .rectangle(118, 708, 178, 34, 0x3a2a24, 1)
       .setStrokeStyle(2, 0xffa35c, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const demolishText = this.add
-      .text(118, 622, '解体モード', {
+      .text(118, 708, '解体モード', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '15px',
         color: '#ffffff',
@@ -849,13 +880,11 @@ export class GameScene extends Phaser.Scene {
       parts: this.addText(24, 142, '', 17, '#d6e3eb'),
       ore: this.addText(24, 172, '', 17, '#d6e3eb'),
       ammo: this.addText(118, 172, '', 17, '#ffb174'),
-      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  C:分岐/合流  M:移設  X:解体', 14, '#fff3cc', true),
+      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  M:移設  X:解体', 14, '#fff3cc', true),
       selected: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 56, '', 13, '#e6eef4'),
       status: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 80, this.statusMessage, 14, '#fff0c4'),
       readyButton,
       readyText,
-      variantButton,
-      variantText,
       modeButton,
       modeText,
       moveButton,
@@ -864,7 +893,7 @@ export class GameScene extends Phaser.Scene {
       demolishText,
     };
 
-    this.drawPanel(8, 260, 224, 386, '建設メニュー');
+    this.drawPanel(8, 260, 224, 492, '建設メニュー');
     this.createBuildMenu();
 
     this.drawPanel(WORLD_VIEW_X, lowerPanelY, WORLD_VIEW_WIDTH, 96, '操作ライン');
@@ -872,21 +901,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createBuildMenu(): void {
-    BUILD_ORDER.forEach((type, index) => {
-      const definition = BUILDING_DEFS[type];
-      const y = 304 + index * 46;
+    BUILD_OPTIONS.forEach((option, index) => {
+      const definition = BUILDING_DEFS[option.type];
+      const y = 304 + index * 37;
       const box = this.add
-        .rectangle(118, y, 178, 40, 0x151a20, 1)
+        .rectangle(118, y, 178, 32, 0x151a20, 1)
         .setOrigin(0.5)
-        .setStrokeStyle(2, type === this.selectedBuild ? 0xffd16a : 0x55606a, 1)
+        .setStrokeStyle(2, this.isBuildOptionSelected(option) ? 0xffd16a : 0x55606a, 1)
         .setDepth(100)
         .setInteractive({ useHandCursor: true });
       this.add
-        .sprite(42, y, `building-${type}`)
-        .setDisplaySize(30, 30)
+        .sprite(40, y, option.iconKey)
+        .setDisplaySize(24, 24)
         .setDepth(101);
-      this.addText(66, y - 14, definition.label, 13, '#e8edf2', true);
-      this.addText(66, y + 5, `建材 ${definition.cost}`, 12, '#cfd8df');
+      this.addText(58, y - 14, option.label, 12, '#e8edf2', true);
+      this.addText(58, y + 1, `${option.detail} / ${definition.cost}`, 10, '#cfd8df');
 
       box.on(
         'pointerdown',
@@ -898,13 +927,13 @@ export class GameScene extends Phaser.Scene {
         ) => {
           event.stopPropagation();
           this.resumeAudio();
-          this.selectBuild(type);
+          this.selectBuildOption(option);
         },
       );
       box.on('pointerover', () => box.setFillStyle(0x22303a, 1));
       box.on('pointerout', () => box.setFillStyle(0x151a20, 1));
 
-      this.buildButtons.push({ type, box });
+      this.buildButtons.push({ option, box });
     });
   }
 
@@ -1116,27 +1145,25 @@ export class GameScene extends Phaser.Scene {
     this.setStatus(`${BUILDING_DEFS[building.type].label}を解体`);
   }
 
-  private selectBuild(type: BuildableType): void {
-    this.selectedBuild = type;
+  private selectBuildOption(option: BuildOption): void {
+    this.selectedBuild = option.type;
+    this.selectedConveyorVariant = option.conveyorVariant ?? 'straight';
     this.setMode('build', false);
-    this.setStatus(`${BUILDING_DEFS[type].label}を選択`, 900);
-    this.buildButtons.forEach(({ type: buttonType, box }) => {
-      box.setStrokeStyle(2, buttonType === type ? 0xffd16a : 0x55606a, 1);
+    this.setStatus(`${option.label}を選択`, 900);
+    this.buildButtons.forEach(({ option: buttonOption, box }) => {
+      box.setStrokeStyle(
+        2,
+        this.isBuildOptionSelected(buttonOption) ? 0xffd16a : 0x55606a,
+        1,
+      );
     });
   }
 
-  private cycleConveyorVariant(): void {
-    const index = PLACEABLE_CONVEYOR_VARIANTS.indexOf(this.selectedConveyorVariant);
-    this.selectedConveyorVariant =
-      PLACEABLE_CONVEYOR_VARIANTS[
-        (Math.max(index, 0) + 1) % PLACEABLE_CONVEYOR_VARIANTS.length
-      ];
-    this.selectedBuild = 'conveyor';
-    this.setMode('build', false);
-    this.setStatus(`コンベア形状: ${CONVEYOR_DEFS[this.selectedConveyorVariant].label}`);
-    this.buildButtons.forEach(({ type: buttonType, box }) => {
-      box.setStrokeStyle(2, buttonType === 'conveyor' ? 0xffd16a : 0x55606a, 1);
-    });
+  private isBuildOptionSelected(option: BuildOption): boolean {
+    return (
+      option.type === this.selectedBuild &&
+      (option.conveyorVariant ?? 'straight') === this.selectedConveyorVariant
+    );
   }
 
   private cycleMode(): void {
@@ -1259,11 +1286,12 @@ export class GameScene extends Phaser.Scene {
     this.ui.parts.setText(`建材 ${Math.floor(this.parts)}`);
     this.ui.ore.setText(`鉄 ${this.factory.oreInNetwork()}`);
     this.ui.ammo.setText(`弾 ${this.factory.ammoInNetwork()}`);
-    this.ui.variantText.setText(
-      `形状: ${CONVEYOR_DEFS[this.selectedConveyorVariant].shortLabel}`,
-    );
+    const buildLabel =
+      this.selectedBuild === 'conveyor'
+        ? CONVEYOR_DEFS[this.selectedConveyorVariant].label
+        : BUILDING_DEFS[this.selectedBuild].label;
     this.ui.selected.setText(
-      `モード:${this.modeLabel(this.mode)}  建設:${BUILDING_DEFS[this.selectedBuild].label}  コンベア:${CONVEYOR_DEFS[this.selectedConveyorVariant].shortLabel}  向き:${this.directionLabel(
+      `モード:${this.modeLabel(this.mode)}  建設:${buildLabel}  向き:${this.directionLabel(
         this.direction,
       )}  曲がりは自動`,
     );
@@ -1280,9 +1308,6 @@ export class GameScene extends Phaser.Scene {
     this.ui.demolishButton
       .setFillStyle(this.mode === 'demolish' ? 0x5a3424 : 0x3a2a24, 1)
       .setStrokeStyle(2, this.mode === 'demolish' ? 0xffd16a : 0xffa35c, 1);
-    this.ui.variantButton
-      .setFillStyle(this.selectedBuild === 'conveyor' ? 0x2d3f26 : 0x1d2b32, 1)
-      .setStrokeStyle(2, this.selectedBuild === 'conveyor' ? 0xffd16a : 0xf5c331, 1);
 
     if (this.statusUntil > 0 && time > this.statusUntil) {
       this.ui.status.setText('鉄を弾薬工場へ、弾をタレットへ実搬送する');
