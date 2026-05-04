@@ -48,10 +48,10 @@ export class UpgradeSystem {
     this.scene.registerUiObject(container);
     const shade = this.scene.add.rectangle(0, 0, 1180, 760, 0x010409, 0.62).setOrigin(0);
     const panel = this.scene.add
-      .rectangle(590, 380, 560, 250, 0x101820, 0.96)
+      .rectangle(590, 380, 640, 310, 0x101820, 0.96)
       .setStrokeStyle(2, 0xb48b5e, 1);
     const title = this.scene.add
-      .text(590, 286, 'アップグレードを選択', {
+      .text(590, 256, 'アップグレードを選択', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '28px',
         color: '#fff4d2',
@@ -59,7 +59,7 @@ export class UpgradeSystem {
       })
       .setOrigin(0.5);
     const subtitle = this.scene.add
-      .text(590, 318, '効果は今回のランで永続します', {
+      .text(590, 292, '効果は今回のランで永続します', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '16px',
         color: '#c9d3dc',
@@ -69,32 +69,34 @@ export class UpgradeSystem {
     container.add([shade, panel, title, subtitle]);
 
     choices.forEach((choice, index) => {
-      const x = 430 + index * 160;
+      const x = 410 + index * 180;
       const button = this.scene.add
-        .rectangle(x, 398, 140, 120, 0x172832, 1)
+        .rectangle(x, 412, 168, 166, 0x172832, 1)
         .setStrokeStyle(2, choice.color, 0.95)
         .setInteractive({ useHandCursor: true });
       const icon = this.scene.add
-        .rectangle(x, 372, 36, 28, choice.color, 1)
+        .rectangle(x, 360, 44, 34, choice.color, 1)
         .setStrokeStyle(2, 0x0b1118, 1);
       const titleText = this.scene.add
-        .text(x, 418, choice.title, {
-          fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-          fontSize: '16px',
-          color: '#ffffff',
-          align: 'center',
-          wordWrap: { width: 120 },
-        })
-        .setOrigin(0.5);
-      const bodyText = this.scene.add
-        .text(x, 454, choice.body, {
+        .text(x, 394, choice.title, {
           fontFamily: '"Yu Gothic", Meiryo, sans-serif',
           fontSize: '15px',
+          color: '#ffffff',
+          align: 'center',
+          wordWrap: { width: 142 },
+          lineSpacing: 2,
+        })
+        .setOrigin(0.5, 0);
+      const bodyText = this.scene.add
+        .text(x, 452, choice.body, {
+          fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+          fontSize: '14px',
           color: '#d8e8ef',
           align: 'center',
-          wordWrap: { width: 120 },
+          wordWrap: { width: 142 },
+          lineSpacing: 2,
         })
-        .setOrigin(0.5);
+        .setOrigin(0.5, 0);
 
       button.on(
         'pointerdown',

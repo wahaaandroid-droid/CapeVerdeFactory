@@ -24,6 +24,14 @@ export type BuildingType =
   | 'turret';
 export type EnemyType = 'small' | 'heavy' | 'suicide';
 export type UpgradeId = 'turret' | 'belt' | 'production' | 'repair';
+export type ConveyorVariant =
+  | 'straight'
+  | 'curveDown'
+  | 'curveUp'
+  | 'splitLeftRight'
+  | 'mergeLeftRight'
+  | 'splitThree'
+  | 'mergeThree';
 
 export interface Cell {
   x: number;
@@ -51,7 +59,23 @@ export interface EnemyDefinition {
   color: number;
 }
 
+export interface ConveyorVariantDefinition {
+  label: string;
+  shortLabel: string;
+  description: string;
+}
+
 export const DIRECTIONS: Direction[] = ['up', 'right', 'down', 'left'];
+
+export const CONVEYOR_VARIANTS: ConveyorVariant[] = [
+  'straight',
+  'curveDown',
+  'curveUp',
+  'splitLeftRight',
+  'mergeLeftRight',
+  'splitThree',
+  'mergeThree',
+];
 
 export const DIRECTION_VECTORS: Record<Direction, Cell> = {
   up: { x: 0, y: -1 },
@@ -102,6 +126,44 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDefinition> = {
     cost: 85,
     maxHp: 140,
     description: '自分に弾薬がある時だけ攻撃',
+  },
+};
+
+export const CONVEYOR_DEFS: Record<ConveyorVariant, ConveyorVariantDefinition> = {
+  straight: {
+    label: '直進',
+    shortLabel: 'I',
+    description: '向きの方向へ搬送',
+  },
+  curveDown: {
+    label: 'カーブ 左→下',
+    shortLabel: 'L↓',
+    description: '左から入り下へ出る',
+  },
+  curveUp: {
+    label: 'カーブ 左→上',
+    shortLabel: 'L↑',
+    description: '左から入り上へ出る',
+  },
+  splitLeftRight: {
+    label: 'T分岐 下→左右',
+    shortLabel: 'T分',
+    description: '1入力を左右へ分岐',
+  },
+  mergeLeftRight: {
+    label: 'T合流 左右→上',
+    shortLabel: 'T合',
+    description: '左右入力を1方向へ合流',
+  },
+  splitThree: {
+    label: '十字分岐 下→3方向',
+    shortLabel: '+分',
+    description: '1入力を3方向へ分岐',
+  },
+  mergeThree: {
+    label: '十字合流 3方向→上',
+    shortLabel: '+合',
+    description: '3入力を1方向へ合流',
   },
 };
 

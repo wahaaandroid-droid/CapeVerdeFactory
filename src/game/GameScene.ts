@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import generatedConveyorsUrl from '../../assets/sprites/generated-conveyors.png';
 import generatedSpritesUrl from '../../assets/sprites/generated-sprites.png';
 import { Bullet } from './entities/Bullet';
 import { Building } from './entities/Building';
@@ -12,6 +13,9 @@ import {
   BUILDING_DEFS,
   BuildingType,
   Cell,
+  CONVEYOR_DEFS,
+  CONVEYOR_VARIANTS,
+  ConveyorVariant,
   DIRECTION_ANGLES,
   Direction,
   EnemyType,
@@ -32,6 +36,7 @@ import {
   WORLD_VIEW_Y,
   manhattan,
   rotateDirection,
+  sameCell,
 } from './types';
 
 type BuildableType = Exclude<BuildingType, 'core'>;
@@ -43,7 +48,7 @@ const BUILD_ORDER: BuildableType[] = [
   'turret',
 ];
 
-type InteractionMode = 'build' | 'rotate' | 'demolish';
+type InteractionMode = 'build' | 'rotate' | 'move' | 'demolish';
 
 interface BuildButton {
   type: BuildableType;
@@ -65,8 +70,10 @@ export class GameScene extends Phaser.Scene {
   };
 
   private selectedBuild: BuildableType = 'conveyor';
+  private selectedConveyorVariant: ConveyorVariant = 'straight';
   private direction: Direction = 'right';
   private mode: InteractionMode = 'build';
+  private movingBuilding: Building | null = null;
   private readonly enemies: Enemy[] = [];
   private readonly bullets: Bullet[] = [];
   private preview!: Phaser.GameObjects.Graphics;
@@ -95,8 +102,12 @@ export class GameScene extends Phaser.Scene {
     status: Phaser.GameObjects.Text;
     readyButton: Phaser.GameObjects.Rectangle;
     readyText: Phaser.GameObjects.Text;
+    variantButton: Phaser.GameObjects.Rectangle;
+    variantText: Phaser.GameObjects.Text;
     modeButton: Phaser.GameObjects.Rectangle;
     modeText: Phaser.GameObjects.Text;
+    moveButton: Phaser.GameObjects.Rectangle;
+    moveText: Phaser.GameObjects.Text;
     demolishButton: Phaser.GameObjects.Rectangle;
     demolishText: Phaser.GameObjects.Text;
   };
@@ -107,6 +118,10 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     this.load.spritesheet('generated-sprites', generatedSpritesUrl, {
+      frameWidth: 128,
+      frameHeight: 128,
+    });
+    this.load.spritesheet('generated-conveyors', generatedConveyorsUrl, {
       frameWidth: 128,
       frameHeight: 128,
     });
@@ -327,6 +342,7 @@ export class GameScene extends Phaser.Scene {
   private replaceGeneratedTextures(): void {
     const entries: {
       key: string;
+      sheet?: string;
       frame: number;
       width: number;
       height: number;
@@ -344,10 +360,16 @@ export class GameScene extends Phaser.Scene {
       { key: 'enemy-suicide', frame: 9, width: 24, height: 24 },
       { key: 'tile-lava', frame: 10, width: TILE_SIZE, height: TILE_SIZE, fill: 0x2b1714 },
       { key: 'tile-resource', frame: 5, width: TILE_SIZE, height: TILE_SIZE, fill: 0x303436 },
+      { key: 'conveyor-curveDown', sheet: 'generated-conveyors', frame: 0, width: 30, height: 30 },
+      { key: 'conveyor-curveUp', sheet: 'generated-conveyors', frame: 1, width: 30, height: 30 },
+      { key: 'conveyor-splitLeftRight', sheet: 'generated-conveyors', frame: 2, width: 30, height: 30 },
+      { key: 'conveyor-mergeLeftRight', sheet: 'generated-conveyors', frame: 3, width: 30, height: 30 },
+      { key: 'conveyor-splitThree', sheet: 'generated-conveyors', frame: 4, width: 30, height: 30 },
+      { key: 'conveyor-mergeThree', sheet: 'generated-conveyors', frame: 5, width: 30, height: 30 },
     ];
 
     for (const entry of entries) {
-      const frame = this.textures.getFrame('generated-sprites', entry.frame);
+      const frame = this.textures.getFrame(entry.sheet ?? 'generated-sprites', entry.frame);
       const source = frame?.source.image as CanvasImageSource | undefined;
 
       if (!frame || !source) {
@@ -464,6 +486,8 @@ export class GameScene extends Phaser.Scene {
 
         if (this.mode === 'rotate') {
           this.tryRotateExisting(pointer);
+        } else if (this.mode === 'move') {
+          this.tryMoveBuilding(pointer);
         } else if (this.mode === 'demolish') {
           this.tryDemolish(pointer);
         } else {
@@ -508,6 +532,14 @@ export class GameScene extends Phaser.Scene {
 
       if (event.key.toLowerCase() === 'q') {
         this.cycleMode();
+      }
+
+      if (event.key.toLowerCase() === 'c') {
+        this.cycleConveyorVariant();
+      }
+
+      if (event.key.toLowerCase() === 'm') {
+        this.setMode(this.mode === 'move' ? 'build' : 'move');
       }
 
       if (event.key.toLowerCase() === 'x') {
@@ -698,13 +730,41 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
+    const variantButton = this.add
+      .rectangle(118, 494, 178, 34, 0x1d2b32, 1)
+      .setStrokeStyle(2, 0xf5c331, 1)
+      .setDepth(102)
+      .setInteractive({ useHandCursor: true });
+    const variantText = this.add
+      .text(118, 494, '', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '13px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(103);
+    variantButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        this.resumeAudio();
+        this.cycleConveyorVariant();
+      },
+    );
+
     const modeButton = this.add
-      .rectangle(118, 560, 178, 34, 0x243340, 1)
+      .rectangle(118, 538, 178, 34, 0x243340, 1)
       .setStrokeStyle(2, 0x7ddcff, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const modeText = this.add
-      .text(118, 560, '向き変更', {
+      .text(118, 538, '向き変更', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '15px',
         color: '#ffffff',
@@ -726,13 +786,41 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
+    const moveButton = this.add
+      .rectangle(118, 580, 178, 34, 0x22343c, 1)
+      .setStrokeStyle(2, 0x78f2d6, 1)
+      .setDepth(102)
+      .setInteractive({ useHandCursor: true });
+    const moveText = this.add
+      .text(118, 580, '移設モード', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '15px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(103);
+    moveButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        this.resumeAudio();
+        this.setMode(this.mode === 'move' ? 'build' : 'move');
+      },
+    );
+
     const demolishButton = this.add
-      .rectangle(118, 606, 178, 34, 0x3a2a24, 1)
+      .rectangle(118, 622, 178, 34, 0x3a2a24, 1)
       .setStrokeStyle(2, 0xffa35c, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const demolishText = this.add
-      .text(118, 606, '解体モード', {
+      .text(118, 622, '解体モード', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '15px',
         color: '#ffffff',
@@ -761,13 +849,17 @@ export class GameScene extends Phaser.Scene {
       parts: this.addText(24, 142, '', 17, '#d6e3eb'),
       ore: this.addText(24, 172, '', 17, '#d6e3eb'),
       ammo: this.addText(118, 172, '', 17, '#ffb174'),
-      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール: ズーム  ドラッグ: 移動  WASD/矢印: 移動', 15, '#fff3cc', true),
-      selected: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 56, '', 14, '#e6eef4'),
+      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  C:形状  M:移設  X:解体', 14, '#fff3cc', true),
+      selected: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 56, '', 13, '#e6eef4'),
       status: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 80, this.statusMessage, 14, '#fff0c4'),
       readyButton,
       readyText,
+      variantButton,
+      variantText,
       modeButton,
       modeText,
+      moveButton,
+      moveText,
       demolishButton,
       demolishText,
     };
@@ -908,8 +1000,17 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.parts -= cost;
-    this.factory.createBuilding(this.selectedBuild, cell, this.direction);
-    this.setStatus(`${BUILDING_DEFS[this.selectedBuild].label}を建設`);
+    this.factory.createBuilding(
+      this.selectedBuild,
+      cell,
+      this.direction,
+      this.selectedBuild === 'conveyor' ? this.selectedConveyorVariant : 'straight',
+    );
+    const shape =
+      this.selectedBuild === 'conveyor'
+        ? `（${CONVEYOR_DEFS[this.selectedConveyorVariant].label}）`
+        : '';
+    this.setStatus(`${BUILDING_DEFS[this.selectedBuild].label}${shape}を建設`);
   }
 
   private tryRotateExisting(pointer: Phaser.Input.Pointer): void {
@@ -932,6 +1033,61 @@ export class GameScene extends Phaser.Scene {
     building.setDirection(rotateDirection(building.direction));
     this.direction = building.direction;
     this.setStatus(`${BUILDING_DEFS[building.type].label}の向き: ${this.directionLabel(building.direction)}`);
+  }
+
+  private tryMoveBuilding(pointer: Phaser.Input.Pointer): void {
+    if (this.wave.state !== 'preparation') {
+      this.setStatus('戦闘中は移設できません');
+      return;
+    }
+
+    const cell = this.pointerToCell(pointer);
+    if (!cell) {
+      return;
+    }
+
+    if (!this.movingBuilding) {
+      const building = this.grid.getBuilding(cell);
+      if (!building?.alive) {
+        this.setStatus('移設する施設をクリック');
+        return;
+      }
+
+      this.movingBuilding = building;
+      this.setStatus(`${BUILDING_DEFS[building.type].label}の移設先を選択`);
+      return;
+    }
+
+    const building = this.movingBuilding;
+    if (sameCell(building.cell, cell)) {
+      this.movingBuilding = null;
+      this.setStatus('移設をキャンセル');
+      return;
+    }
+
+    if (!this.grid.isBuildable(cell)) {
+      this.setStatus('そこへは移設できません');
+      return;
+    }
+
+    if (building.type === 'miner' && this.grid.getTerrain(cell) !== 'resource') {
+      this.setStatus('採掘機は資源ノードへ移設');
+      return;
+    }
+
+    const existing = this.grid.getBuilding(cell);
+    if (existing?.alive) {
+      this.setStatus('移設先に施設があります');
+      return;
+    }
+
+    if (existing && !existing.alive) {
+      this.factory.removeBuilding(existing);
+    }
+
+    this.factory.moveBuilding(building, cell);
+    this.movingBuilding = null;
+    this.setStatus(`${BUILDING_DEFS[building.type].label}を移設`);
   }
 
   private tryDemolish(pointer: Phaser.Input.Pointer): void {
@@ -968,10 +1124,24 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private cycleConveyorVariant(): void {
+    const index = CONVEYOR_VARIANTS.indexOf(this.selectedConveyorVariant);
+    this.selectedConveyorVariant =
+      CONVEYOR_VARIANTS[(index + 1) % CONVEYOR_VARIANTS.length];
+    this.selectedBuild = 'conveyor';
+    this.setMode('build', false);
+    this.setStatus(`コンベア形状: ${CONVEYOR_DEFS[this.selectedConveyorVariant].label}`);
+    this.buildButtons.forEach(({ type: buttonType, box }) => {
+      box.setStrokeStyle(2, buttonType === 'conveyor' ? 0xffd16a : 0x55606a, 1);
+    });
+  }
+
   private cycleMode(): void {
     if (this.mode === 'build') {
       this.setMode('rotate');
     } else if (this.mode === 'rotate') {
+      this.setMode('move');
+    } else if (this.mode === 'move') {
       this.setMode('demolish');
     } else {
       this.setMode('build');
@@ -980,6 +1150,9 @@ export class GameScene extends Phaser.Scene {
 
   private setMode(mode: InteractionMode, announce = true): void {
     this.mode = mode;
+    if (mode !== 'move') {
+      this.movingBuilding = null;
+    }
 
     if (!announce) {
       return;
@@ -988,6 +1161,7 @@ export class GameScene extends Phaser.Scene {
     const labels: Record<InteractionMode, string> = {
       build: '建設モード',
       rotate: '向き変更モード',
+      move: '移設モード',
       demolish: '解体モード',
     };
     this.setStatus(labels[mode]);
@@ -1008,13 +1182,26 @@ export class GameScene extends Phaser.Scene {
     const x = MAP_ORIGIN_X + cell.x * TILE_SIZE;
     const y = MAP_ORIGIN_Y + cell.y * TILE_SIZE;
 
-    if (this.mode === 'rotate' || this.mode === 'demolish') {
+    if (this.mode === 'rotate' || this.mode === 'move' || this.mode === 'demolish') {
       const building = this.grid.getBuilding(cell);
-      const valid =
+      const moving = this.mode === 'move' && this.movingBuilding !== null;
+      const destinationIsValid =
+        moving &&
+        this.wave.state === 'preparation' &&
+        this.grid.isBuildable(cell) &&
+        !this.grid.getBuilding(cell)?.alive &&
+        (this.movingBuilding!.type !== 'miner' || this.grid.getTerrain(cell) === 'resource');
+      const selectableIsValid =
         this.wave.state === 'preparation' &&
         Boolean(building?.alive) &&
-        building?.type !== 'core';
-      const color = this.mode === 'rotate' ? 0x7ddcff : 0xffa35c;
+        (this.mode !== 'rotate' || building?.type !== 'core');
+      const valid = moving ? destinationIsValid : selectableIsValid;
+      const color =
+        this.mode === 'rotate'
+          ? 0x7ddcff
+          : this.mode === 'move'
+            ? 0x78f2d6
+            : 0xffa35c;
       this.preview.lineStyle(2, valid ? color : 0xff4d3d, 0.95);
       this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
 
@@ -1022,6 +1209,9 @@ export class GameScene extends Phaser.Scene {
         this.preview.lineStyle(3, 0xffa35c, 0.95);
         this.preview.lineBetween(x + 10, y + 10, x + TILE_SIZE - 10, y + TILE_SIZE - 10);
         this.preview.lineBetween(x + TILE_SIZE - 10, y + 10, x + 10, y + TILE_SIZE - 10);
+      } else if (this.mode === 'move' && this.movingBuilding) {
+        this.preview.lineStyle(2, 0x78f2d6, 0.8);
+        this.preview.strokeCircle(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE * 0.25);
       }
       return;
     }
@@ -1066,10 +1256,13 @@ export class GameScene extends Phaser.Scene {
     this.ui.parts.setText(`建材 ${Math.floor(this.parts)}`);
     this.ui.ore.setText(`鉄 ${this.factory.oreInNetwork()}`);
     this.ui.ammo.setText(`弾 ${this.factory.ammoInNetwork()}`);
+    this.ui.variantText.setText(
+      `形状: ${CONVEYOR_DEFS[this.selectedConveyorVariant].shortLabel}`,
+    );
     this.ui.selected.setText(
-      `モード: ${this.modeLabel(this.mode)}  選択: ${BUILDING_DEFS[this.selectedBuild].label}  向き: ${this.directionLabel(
+      `モード:${this.modeLabel(this.mode)}  建設:${BUILDING_DEFS[this.selectedBuild].label}  コンベア:${CONVEYOR_DEFS[this.selectedConveyorVariant].shortLabel}  向き:${this.directionLabel(
         this.direction,
-      )}  R:向き / Q:モード切替 / X:解体`,
+      )}  Q:モード切替`,
     );
     this.ui.readyButton
       .setFillStyle(this.wave.state === 'preparation' ? 0x1f4c3a : 0x24303a, 1)
@@ -1078,9 +1271,15 @@ export class GameScene extends Phaser.Scene {
     this.ui.modeButton
       .setFillStyle(this.mode === 'rotate' ? 0x31506a : 0x243340, 1)
       .setStrokeStyle(2, this.mode === 'rotate' ? 0xffd16a : 0x7ddcff, 1);
+    this.ui.moveButton
+      .setFillStyle(this.mode === 'move' ? 0x235d58 : 0x22343c, 1)
+      .setStrokeStyle(2, this.mode === 'move' ? 0xffd16a : 0x78f2d6, 1);
     this.ui.demolishButton
       .setFillStyle(this.mode === 'demolish' ? 0x5a3424 : 0x3a2a24, 1)
       .setStrokeStyle(2, this.mode === 'demolish' ? 0xffd16a : 0xffa35c, 1);
+    this.ui.variantButton
+      .setFillStyle(this.selectedBuild === 'conveyor' ? 0x2d3f26 : 0x1d2b32, 1)
+      .setStrokeStyle(2, this.selectedBuild === 'conveyor' ? 0xffd16a : 0xf5c331, 1);
 
     if (this.statusUntil > 0 && time > this.statusUntil) {
       this.ui.status.setText('鉄を弾薬工場へ、弾をタレットへ実搬送する');
@@ -1192,6 +1391,9 @@ export class GameScene extends Phaser.Scene {
   private modeLabel(mode: InteractionMode): string {
     if (mode === 'rotate') {
       return '向き変更';
+    }
+    if (mode === 'move') {
+      return '移設';
     }
     if (mode === 'demolish') {
       return '解体';

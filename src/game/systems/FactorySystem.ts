@@ -3,7 +3,9 @@ import { Building } from '../entities/Building';
 import {
   BuildingType,
   Cell,
+  ConveyorVariant,
   Direction,
+  DIRECTIONS,
   ItemType,
   neighbor,
 } from '../types';
@@ -19,6 +21,7 @@ export class FactorySystem {
     type: BuildingType,
     cell: Cell,
     direction: Direction,
+    conveyorVariant: ConveyorVariant = 'straight',
   ): Building {
     const building = new Building(
       this.scene,
@@ -26,9 +29,16 @@ export class FactorySystem {
       cell,
       this.grid.cellToWorld(cell),
       direction,
+      conveyorVariant,
     );
     this.grid.setBuilding(cell, building);
     return building;
+  }
+
+  moveBuilding(building: Building, cell: Cell): void {
+    this.grid.clearBuilding(building.cell);
+    building.moveTo(cell, this.grid.cellToWorld(cell));
+    this.grid.setBuilding(cell, building);
   }
 
   removeBuilding(building: Building): void {
@@ -150,7 +160,37 @@ export class FactorySystem {
   }
 
   private outputItem(source: Building, item: ItemType): boolean {
-    const targetCell = neighbor(source.cell, source.direction);
+    if (source.type === 'conveyor') {
+      return this.outputConveyorItem(source, item);
+    }
+
+    return this.outputToDirection(source, item, source.direction);
+  }
+
+  private outputConveyorItem(source: Building, item: ItemType): boolean {
+    const outputs = this.outputDirections(source);
+    if (outputs.length <= 0) {
+      return false;
+    }
+
+    const start = source.nextOutputIndex % outputs.length;
+    for (let offset = 0; offset < outputs.length; offset += 1) {
+      const index = (start + offset) % outputs.length;
+      if (this.outputToDirection(source, item, outputs[index])) {
+        source.nextOutputIndex = (index + 1) % outputs.length;
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private outputToDirection(
+    source: Building,
+    item: ItemType,
+    direction: Direction,
+  ): boolean {
+    const targetCell = neighbor(source.cell, direction);
     if (!this.grid.inBounds(targetCell)) {
       return false;
     }
@@ -160,16 +200,21 @@ export class FactorySystem {
       return false;
     }
 
-    return this.tryReceiveItem(target, item, this.scene.time.now);
+    return this.tryReceiveItem(target, item, this.scene.time.now, source.cell);
   }
 
-  private tryReceiveItem(target: Building, item: ItemType, time: number): boolean {
+  private tryReceiveItem(
+    target: Building,
+    item: ItemType,
+    time: number,
+    sourceCell?: Cell,
+  ): boolean {
     if (!target.alive) {
       return false;
     }
 
     if (target.type === 'conveyor') {
-      if (target.item) {
+      if (target.item || !this.canConveyorReceive(target, sourceCell)) {
         return false;
       }
 
@@ -200,6 +245,78 @@ export class FactorySystem {
     }
 
     return false;
+  }
+
+  private canConveyorReceive(target: Building, sourceCell?: Cell): boolean {
+    if (target.conveyorVariant === 'straight' || !sourceCell) {
+      return true;
+    }
+
+    const incoming = this.directionBetween(target.cell, sourceCell);
+    return Boolean(incoming && this.inputDirections(target).includes(incoming));
+  }
+
+  private inputDirections(building: Building): Direction[] {
+    if (building.conveyorVariant === 'straight') {
+      return [...DIRECTIONS];
+    }
+
+    const baseInputs: Record<ConveyorVariant, Direction[]> = {
+      straight: DIRECTIONS,
+      curveDown: ['left'],
+      curveUp: ['left'],
+      splitLeftRight: ['down'],
+      mergeLeftRight: ['left', 'right'],
+      splitThree: ['down'],
+      mergeThree: ['left', 'down', 'right'],
+    };
+
+    return this.rotateDirections(baseInputs[building.conveyorVariant], building.direction);
+  }
+
+  private outputDirections(building: Building): Direction[] {
+    if (building.conveyorVariant === 'straight') {
+      return [building.direction];
+    }
+
+    const baseOutputs: Record<ConveyorVariant, Direction[]> = {
+      straight: ['right'],
+      curveDown: ['down'],
+      curveUp: ['up'],
+      splitLeftRight: ['left', 'right'],
+      mergeLeftRight: ['up'],
+      splitThree: ['left', 'up', 'right'],
+      mergeThree: ['up'],
+    };
+
+    return this.rotateDirections(baseOutputs[building.conveyorVariant], building.direction);
+  }
+
+  private rotateDirections(directions: Direction[], facing: Direction): Direction[] {
+    return directions.map((direction) => this.rotateBaseDirection(direction, facing));
+  }
+
+  private rotateBaseDirection(base: Direction, facing: Direction): Direction {
+    const order: Direction[] = ['right', 'down', 'left', 'up'];
+    const baseIndex = order.indexOf(base);
+    const rotation = order.indexOf(facing);
+    return order[(baseIndex + rotation) % order.length];
+  }
+
+  private directionBetween(from: Cell, to: Cell): Direction | null {
+    if (to.x === from.x && to.y === from.y - 1) {
+      return 'up';
+    }
+    if (to.x === from.x + 1 && to.y === from.y) {
+      return 'right';
+    }
+    if (to.x === from.x && to.y === from.y + 1) {
+      return 'down';
+    }
+    if (to.x === from.x - 1 && to.y === from.y) {
+      return 'left';
+    }
+    return null;
   }
 
   private capacity(building: Building, item: ItemType): number {

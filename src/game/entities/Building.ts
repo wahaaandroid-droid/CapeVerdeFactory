@@ -3,6 +3,7 @@ import {
   BUILDING_DEFS,
   BuildingType,
   Cell,
+  ConveyorVariant,
   DIRECTION_ANGLES,
   Direction,
   ItemType,
@@ -11,8 +12,9 @@ import {
 
 export class Building {
   readonly type: BuildingType;
-  readonly cell: Cell;
+  cell: Cell;
   direction: Direction;
+  conveyorVariant: ConveyorVariant;
   hp: number;
   readonly maxHp: number;
   alive = true;
@@ -22,6 +24,7 @@ export class Building {
   nextWorkAt = 0;
   nextMoveAt = 0;
   nextFireAt = 0;
+  nextOutputIndex = 0;
 
   private readonly container: Phaser.GameObjects.Container;
   private readonly sprite: Phaser.GameObjects.Sprite;
@@ -39,17 +42,19 @@ export class Building {
     cell: Cell,
     world: Phaser.Math.Vector2,
     direction: Direction,
+    conveyorVariant: ConveyorVariant = 'straight',
   ) {
     this.type = type;
     this.cell = { ...cell };
     this.direction = direction;
+    this.conveyorVariant = conveyorVariant;
     this.maxHp = BUILDING_DEFS[type].maxHp;
     this.hp = this.maxHp;
 
     this.container = scene.add.container(world.x, world.y).setDepth(20);
     this.registerWorld(scene, this.container);
     this.sprite = scene.add
-      .sprite(0, 0, `building-${type}`)
+      .sprite(0, 0, this.textureKey())
       .setOrigin(0.5)
       .setScale(TILE_SIZE / 30);
     this.directionArrow = scene.add
@@ -97,6 +102,21 @@ export class Building {
   setDirection(direction: Direction): void {
     this.direction = direction;
     this.updateDirectionVisual();
+  }
+
+  setConveyorVariant(variant: ConveyorVariant): void {
+    if (this.type !== 'conveyor') {
+      return;
+    }
+
+    this.conveyorVariant = variant;
+    this.sprite.setTexture(this.textureKey());
+    this.updateDirectionVisual();
+  }
+
+  moveTo(cell: Cell, world: Phaser.Math.Vector2): void {
+    this.cell = { ...cell };
+    this.container.setPosition(world.x, world.y);
   }
 
   damage(amount: number): boolean {
@@ -167,7 +187,7 @@ export class Building {
         0,
         1,
       );
-      const angle = Phaser.Math.DegToRad(DIRECTION_ANGLES[this.direction]);
+      const angle = Phaser.Math.DegToRad(DIRECTION_ANGLES[this.itemMotionDirection()]);
       const distance = Phaser.Math.Linear(-TILE_SIZE * 0.32, TILE_SIZE * 0.32, progress);
       this.itemSprite.setPosition(Math.cos(angle) * distance, Math.sin(angle) * distance);
     } else if (this.item) {
@@ -206,6 +226,37 @@ export class Building {
           this.type !== 'conveyor' &&
           this.type !== 'turret',
       );
+  }
+
+  private textureKey(): string {
+    if (this.type !== 'conveyor' || this.conveyorVariant === 'straight') {
+      return `building-${this.type}`;
+    }
+
+    return `conveyor-${this.conveyorVariant}`;
+  }
+
+  private itemMotionDirection(): Direction {
+    if (this.type !== 'conveyor') {
+      return this.direction;
+    }
+
+    if (this.conveyorVariant === 'curveDown') {
+      return this.rotateBaseDirection('down');
+    }
+
+    if (this.conveyorVariant === 'curveUp') {
+      return this.rotateBaseDirection('up');
+    }
+
+    return this.direction;
+  }
+
+  private rotateBaseDirection(base: Direction): Direction {
+    const order: Direction[] = ['right', 'down', 'left', 'up'];
+    const baseIndex = order.indexOf(base);
+    const rotation = order.indexOf(this.direction);
+    return order[(baseIndex + rotation) % order.length];
   }
 
   private updateStockVisual(): void {
