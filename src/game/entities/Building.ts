@@ -5,6 +5,7 @@ import {
   Cell,
   ConveyorVariant,
   DIRECTION_ANGLES,
+  DIRECTIONS,
   Direction,
   ItemType,
   TILE_SIZE,
@@ -27,6 +28,7 @@ export class Building {
   nextOutputIndex = 0;
 
   private readonly container: Phaser.GameObjects.Container;
+  private readonly conveyorLinks: Phaser.GameObjects.Graphics;
   private readonly sprite: Phaser.GameObjects.Sprite;
   private readonly directionArrow: Phaser.GameObjects.Sprite;
   private readonly itemSprite: Phaser.GameObjects.Sprite;
@@ -54,6 +56,7 @@ export class Building {
 
     this.container = scene.add.container(world.x, world.y).setDepth(20);
     this.registerWorld(scene, this.container);
+    this.conveyorLinks = scene.add.graphics().setVisible(type === 'conveyor');
     this.sprite = scene.add
       .sprite(0, 0, this.textureKey())
       .setOrigin(0.5)
@@ -90,6 +93,7 @@ export class Building {
       .setVisible(false);
 
     this.container.add([
+      this.conveyorLinks,
       this.sprite,
       this.directionArrow,
       this.itemSprite,
@@ -134,6 +138,7 @@ export class Building {
       this.oreStored = 0;
       this.ammoStored = 0;
       this.sprite.setTint(0x333333);
+      this.conveyorLinks.setVisible(false);
       this.directionArrow.setVisible(false);
       this.itemSprite.setVisible(false);
       this.stockText.setVisible(false);
@@ -226,6 +231,8 @@ export class Building {
       this.sprite.setAngle(this.spriteAngle());
     }
 
+    this.updateConveyorLinks();
+
     const angle = DIRECTION_ANGLES[this.direction];
     const radians = Phaser.Math.DegToRad(angle);
     this.directionArrow
@@ -238,6 +245,74 @@ export class Building {
           this.type !== 'turret' &&
           this.type !== 'wall',
       );
+  }
+
+  private updateConveyorLinks(): void {
+    this.conveyorLinks.clear();
+    this.conveyorLinks.setVisible(this.alive && this.type === 'conveyor');
+    if (!this.alive || this.type !== 'conveyor') {
+      return;
+    }
+
+    const directions = this.conveyorLinkDirections();
+    const length = TILE_SIZE * 0.56;
+    const strokes = [
+      { width: 18, color: 0x080b0f, alpha: 1 },
+      { width: 14, color: 0x20272e, alpha: 1 },
+      { width: 8, color: 0x3b444c, alpha: 1 },
+      { width: 2, color: 0xf3c53c, alpha: 0.55 },
+    ];
+
+    for (const stroke of strokes) {
+      this.conveyorLinks.lineStyle(stroke.width, stroke.color, stroke.alpha);
+      for (const direction of directions) {
+        const point = this.directionPoint(direction, length);
+        this.conveyorLinks.strokeLineShape(
+          new Phaser.Geom.Line(0, 0, point.x, point.y),
+        );
+      }
+    }
+
+    this.conveyorLinks.fillStyle(0x20272e, 1);
+    this.conveyorLinks.fillCircle(0, 0, 6);
+  }
+
+  private conveyorLinkDirections(): Direction[] {
+    if (this.type !== 'conveyor') {
+      return [];
+    }
+
+    if (this.conveyorVariant === 'straight') {
+      return [this.oppositeDirection(this.direction), this.direction];
+    }
+
+    if (this.conveyorVariant === 'curveDown') {
+      return [
+        this.rotateBaseDirection('left'),
+        this.rotateBaseDirection('down'),
+      ];
+    }
+
+    if (this.conveyorVariant === 'curveUp') {
+      return [
+        this.rotateBaseDirection('left'),
+        this.rotateBaseDirection('up'),
+      ];
+    }
+
+    if (this.conveyorVariant === 'junctionThree') {
+      return [this.direction, ...this.perpendicularDirections(this.direction)];
+    }
+
+    return [...DIRECTIONS];
+  }
+
+  private directionPoint(direction: Direction, length: number): Phaser.Math.Vector2 {
+    const radians = Phaser.Math.DegToRad(DIRECTION_ANGLES[direction]);
+    return new Phaser.Math.Vector2(
+      Math.cos(radians) * length,
+      Math.sin(radians) * length,
+    );
   }
 
   private textureKey(): string {
@@ -302,6 +377,14 @@ export class Building {
       return 'up';
     }
     return 'right';
+  }
+
+  private perpendicularDirections(direction: Direction): Direction[] {
+    if (direction === 'up' || direction === 'down') {
+      return ['left', 'right'];
+    }
+
+    return ['up', 'down'];
   }
 
   private updateStockVisual(): void {
