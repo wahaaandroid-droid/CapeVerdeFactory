@@ -326,6 +326,7 @@ type WeaponBuildingType =
   | 'cannonTurret'
   | 'empTurret'
   | 'missileTurret';
+type WeaponSoundType = WeaponBuildingType | 'droneTower' | 'combatDrone';
 
 interface WeaponConfig {
   ammo: ItemType;
@@ -1362,7 +1363,7 @@ export class GameScene extends Phaser.Scene {
       turret.nextFireAt = time + 560 * config.fireIntervalMultiplier;
       turret.removeStored(config.ammo);
       turret.flash(0xffe0a3);
-      this.playTurretShotSound();
+      this.playWeaponShotSound(turret.type);
       const bullet = this.bullets.find((candidate) => !candidate.active) ?? this.addBullet();
       const position = turret.getWorldPosition();
       bullet.fire(
@@ -1407,6 +1408,7 @@ export class GameScene extends Phaser.Scene {
       tower.flash(0x9de8ff);
       const position = tower.getWorldPosition();
       drone.launch(position.x, position.y);
+      this.playWeaponShotSound('droneTower');
       this.floatText(position, 'ドローン発進', 0x9de8ff);
     }
   }
@@ -1419,6 +1421,7 @@ export class GameScene extends Phaser.Scene {
         this.findNearestEnemy(drone.getWorldPosition(), Number.POSITIVE_INFINITY),
         (x, y, target) => {
           const bullet = this.bullets.find((candidate) => !candidate.active) ?? this.addBullet();
+          this.playWeaponShotSound('combatDrone');
           bullet.fire(x, y, target, this.modifiers.turretDamage * 0.45, 0x9de8ff);
         },
       );
@@ -2257,31 +2260,83 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private playTurretShotSound(): void {
+  private playWeaponShotSound(type: WeaponSoundType): void {
     const context = this.ensureAudioContext();
     if (!context || context.state === 'suspended') {
       return;
     }
 
+    if (type === 'sniperTurret') {
+      this.playTone(context, 'triangle', 980, 520, 0.16, 0.105, 'bandpass', 1400);
+      return;
+    }
+
+    if (type === 'cannonTurret') {
+      this.playTone(context, 'sawtooth', 210, 58, 0.22, 0.14, 'lowpass', 850);
+      this.playTone(context, 'square', 82, 46, 0.18, 0.05, 'lowpass', 420, 0.025);
+      return;
+    }
+
+    if (type === 'empTurret') {
+      this.playTone(context, 'sine', 260, 1320, 0.26, 0.09, 'bandpass', 980);
+      this.playTone(context, 'triangle', 640, 190, 0.2, 0.045, 'highpass', 520, 0.04);
+      return;
+    }
+
+    if (type === 'missileTurret') {
+      this.playTone(context, 'sawtooth', 160, 44, 0.34, 0.16, 'lowpass', 700);
+      this.playTone(context, 'triangle', 540, 120, 0.18, 0.055, 'lowpass', 1100);
+      return;
+    }
+
+    if (type === 'droneTower') {
+      this.playTone(context, 'triangle', 210, 620, 0.24, 0.08, 'bandpass', 720);
+      this.playTone(context, 'sine', 520, 820, 0.16, 0.035, 'bandpass', 1100, 0.05);
+      return;
+    }
+
+    if (type === 'combatDrone') {
+      this.playTone(context, 'square', 760, 420, 0.07, 0.045, 'highpass', 650);
+      return;
+    }
+
+    this.playTone(context, 'square', 520, 180, 0.1, 0.12, 'lowpass', 1600);
+  }
+
+  private playTone(
+    context: AudioContext,
+    oscillatorType: OscillatorType,
+    startFrequency: number,
+    endFrequency: number,
+    duration: number,
+    volume: number,
+    filterType: BiquadFilterType,
+    filterFrequency: number,
+    delay = 0,
+  ): void {
     const now = context.currentTime;
+    const start = now + delay;
     const oscillator = context.createOscillator();
     const filter = context.createBiquadFilter();
     const gain = context.createGain();
 
-    oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(520, now);
-    oscillator.frequency.exponentialRampToValueAtTime(180, now + 0.08);
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1600, now);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+    oscillator.type = oscillatorType;
+    oscillator.frequency.setValueAtTime(startFrequency, start);
+    oscillator.frequency.exponentialRampToValueAtTime(
+      Math.max(1, endFrequency),
+      start + duration * 0.8,
+    );
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(filterFrequency, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
 
     oscillator.connect(filter);
     filter.connect(gain);
     gain.connect(context.destination);
-    oscillator.start(now);
-    oscillator.stop(now + 0.11);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.02);
   }
 
   private ensureAudioContext(): AudioContext | null {
