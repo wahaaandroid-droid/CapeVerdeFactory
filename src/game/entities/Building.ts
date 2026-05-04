@@ -224,7 +224,8 @@ export class Building {
         this.alive &&
           this.type !== 'core' &&
           this.type !== 'conveyor' &&
-          this.type !== 'turret',
+          this.type !== 'turret' &&
+          this.type !== 'wall',
       );
   }
 

@@ -111,6 +111,13 @@ const BUILD_OPTIONS: BuildOption[] = [
     detail: '弾を消費して攻撃',
     iconKey: 'building-turret',
   },
+  {
+    id: 'wall',
+    type: 'wall',
+    label: '防御壁',
+    detail: '敵を足止めする高耐久壁',
+    iconKey: 'building-wall',
+  },
 ];
 
 type InteractionMode = 'build' | 'rotate' | 'move' | 'demolish';
@@ -903,19 +910,19 @@ export class GameScene extends Phaser.Scene {
   private createBuildMenu(): void {
     BUILD_OPTIONS.forEach((option, index) => {
       const definition = BUILDING_DEFS[option.type];
-      const y = 304 + index * 37;
+      const y = 304 + index * 34;
       const box = this.add
-        .rectangle(118, y, 178, 32, 0x151a20, 1)
+        .rectangle(118, y, 178, 30, 0x151a20, 1)
         .setOrigin(0.5)
         .setStrokeStyle(2, this.isBuildOptionSelected(option) ? 0xffd16a : 0x55606a, 1)
         .setDepth(100)
         .setInteractive({ useHandCursor: true });
       this.add
         .sprite(40, y, option.iconKey)
-        .setDisplaySize(24, 24)
+        .setDisplaySize(22, 22)
         .setDepth(101);
-      this.addText(58, y - 14, option.label, 12, '#e8edf2', true);
-      this.addText(58, y + 1, `${option.detail} / ${definition.cost}`, 10, '#cfd8df');
+      this.addText(58, y - 13, option.label, 11, '#e8edf2', true);
+      this.addText(58, y, `${option.detail} / ${definition.cost}`, 9, '#cfd8df');
 
       box.on(
         'pointerdown',
@@ -1197,6 +1204,18 @@ export class GameScene extends Phaser.Scene {
     this.setStatus(labels[mode]);
   }
 
+  private drawTurretRange(
+    centerX: number,
+    centerY: number,
+    valid = true,
+  ): void {
+    const color = valid ? 0x7ddcff : 0xff4d3d;
+    this.preview.fillStyle(color, 0.08);
+    this.preview.fillCircle(centerX, centerY, this.modifiers.turretRange);
+    this.preview.lineStyle(2, color, 0.62);
+    this.preview.strokeCircle(centerX, centerY, this.modifiers.turretRange);
+  }
+
   private updatePreview(): void {
     this.preview.clear();
     if (this.gameEnded || this.wave.state === 'upgrade') {
@@ -1243,6 +1262,10 @@ export class GameScene extends Phaser.Scene {
         this.preview.lineStyle(2, 0x78f2d6, 0.8);
         this.preview.strokeCircle(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE * 0.25);
       }
+
+      if (this.mode === 'rotate' && building?.alive && building.type === 'turret') {
+        this.drawTurretRange(x + TILE_SIZE / 2, y + TILE_SIZE / 2, valid);
+      }
       return;
     }
 
@@ -1255,9 +1278,15 @@ export class GameScene extends Phaser.Scene {
     this.preview.lineStyle(2, valid ? 0x7dff9f : 0xff4d3d, 0.95);
     this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
 
-    this.preview.fillStyle(0xf5c331, 0.75);
     const centerX = x + TILE_SIZE / 2;
     const centerY = y + TILE_SIZE / 2;
+    if (this.selectedBuild === 'turret') {
+      this.drawTurretRange(centerX, centerY, valid);
+      this.preview.lineStyle(2, valid ? 0x7dff9f : 0xff4d3d, 0.95);
+      this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+    }
+
+    this.preview.fillStyle(0xf5c331, 0.75);
     const angle = Phaser.Math.DegToRad(DIRECTION_ANGLES[this.direction]);
     this.preview.fillTriangle(
       centerX + Math.cos(angle) * 10,

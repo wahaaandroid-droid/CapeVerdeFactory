@@ -145,6 +145,26 @@ export function createPixelTextures(scene: Phaser.Scene): void {
     graphics.strokeRect(8, 13, 14, 12);
   });
 
+  makeTexture(scene, 'building-wall', 30, 30, (graphics) => {
+    graphics.fillStyle(0x15191d, 1);
+    graphics.fillRect(4, 6, 22, 20);
+    graphics.fillStyle(0x46505a, 1);
+    graphics.fillRect(5, 7, 8, 8);
+    graphics.fillRect(14, 7, 11, 8);
+    graphics.fillRect(5, 16, 11, 8);
+    graphics.fillRect(17, 16, 8, 8);
+    graphics.fillStyle(0x6f7d88, 1);
+    graphics.fillRect(6, 8, 6, 2);
+    graphics.fillRect(15, 8, 8, 2);
+    graphics.fillRect(6, 17, 8, 2);
+    graphics.fillRect(18, 17, 5, 2);
+    graphics.fillStyle(0xff7a2f, 1);
+    graphics.fillRect(4, 11, 2, 4);
+    graphics.fillRect(24, 18, 2, 4);
+    graphics.lineStyle(2, 0x8c98a3, 1);
+    graphics.strokeRect(4, 6, 22, 20);
+  });
+
   makeTexture(scene, 'enemy-small', 24, 24, (graphics) => {
     graphics.fillStyle(0x171b20, 1);
     graphics.fillRect(4, 8, 16, 11);

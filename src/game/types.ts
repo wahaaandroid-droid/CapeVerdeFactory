@@ -21,7 +21,8 @@ export type BuildingType =
   | 'miner'
   | 'conveyor'
   | 'ammoFactory'
-  | 'turret';
+  | 'turret'
+  | 'wall';
 export type EnemyType = 'small' | 'heavy' | 'suicide';
 export type UpgradeId = 'turret' | 'belt' | 'production' | 'repair';
 export type ConveyorVariant =
@@ -126,6 +127,13 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDefinition> = {
     cost: 85,
     maxHp: 140,
     description: '自分に弾薬がある時だけ攻撃',
+  },
+  wall: {
+    label: '防御壁',
+    shortLabel: 'WALL',
+    cost: 35,
+    maxHp: 360,
+    description: '敵の侵攻を受け止める高耐久壁',
   },
 };
 
