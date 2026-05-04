@@ -6,13 +6,116 @@ import {
   ConveyorVariant,
   Direction,
   DIRECTIONS,
+  ITEM_DEFS,
   ItemType,
   neighbor,
+  storageCapacity,
 } from '../types';
 import { GridSystem } from './GridSystem';
 
 const AUTO_CURVE_VARIANTS: ConveyorVariant[] = ['straight', 'curveDown', 'curveUp'];
 const CURVE_VARIANTS: ConveyorVariant[] = ['curveDown', 'curveUp'];
+const OUTPUT_BUILDINGS: BuildingType[] = [
+  'miner',
+  'ammoFactory',
+  'metalPlateFactory',
+  'plasticFactory',
+  'fuelFactory',
+  'specialAmmoFactory',
+  'missileFactory',
+  'droneFactory',
+];
+
+interface FactoryRecipe {
+  label: string;
+  inputs: Partial<Record<ItemType, number>>;
+  output: ItemType;
+  amount?: number;
+  color: number;
+}
+
+const FACTORY_RECIPES: Partial<Record<BuildingType, FactoryRecipe[]>> = {
+  ammoFactory: [
+    {
+      label: '弾薬',
+      inputs: { ironOre: 1 },
+      output: 'ammo',
+      color: 0xffa65a,
+    },
+  ],
+  metalPlateFactory: [
+    {
+      label: '鉄板',
+      inputs: { ironOre: 1 },
+      output: 'ironPlate',
+      color: 0xd5e2ea,
+    },
+    {
+      label: '銅板',
+      inputs: { copperOre: 1 },
+      output: 'copperPlate',
+      color: 0xe99a54,
+    },
+    {
+      label: 'ワイヤー',
+      inputs: { copperOre: 1 },
+      output: 'wire',
+      color: 0xf4b552,
+    },
+  ],
+  plasticFactory: [
+    {
+      label: 'プラスチック',
+      inputs: { oil: 1 },
+      output: 'plastic',
+      color: 0xe5f6ff,
+    },
+  ],
+  fuelFactory: [
+    {
+      label: '燃料',
+      inputs: { oil: 1 },
+      output: 'fuel',
+      color: 0xffc34c,
+    },
+  ],
+  specialAmmoFactory: [
+    {
+      label: '強化弾',
+      inputs: { ironPlate: 1, copperPlate: 1 },
+      output: 'enhancedAmmo',
+      color: 0xffe073,
+    },
+    {
+      label: '焼夷弾',
+      inputs: { ironPlate: 1, fuel: 1 },
+      output: 'incendiaryAmmo',
+      color: 0xff6834,
+    },
+    {
+      label: 'EMP弾',
+      inputs: { wire: 1, plastic: 1 },
+      output: 'empAmmo',
+      color: 0x68d7ff,
+    },
+  ],
+  missileFactory: [
+    {
+      label: 'ミサイル',
+      inputs: { ironPlate: 2, wire: 2, fuel: 4 },
+      output: 'missile',
+      color: 0xfff0a6,
+    },
+  ],
+  droneFactory: [
+    {
+      label: 'ドローン',
+      inputs: { ironPlate: 5, wire: 5, plastic: 5 },
+      output: 'drone',
+      color: 0x9de8ff,
+    },
+  ],
+};
 
 export class FactorySystem {
   constructor(
@@ -86,8 +189,8 @@ export class FactorySystem {
 
       if (building.type === 'miner') {
         this.updateMiner(building, time);
-      } else if (building.type === 'ammoFactory') {
-        this.updateAmmoFactory(building, time);
+      } else if (FACTORY_RECIPES[building.type]) {
+        this.updateFactory(building, time);
       } else if (building.type === 'conveyor') {
         this.updateConveyor(building, time);
       }
@@ -103,56 +206,69 @@ export class FactorySystem {
   }
 
   ammoInNetwork(): number {
-    return this.grid.allBuildings().reduce((total, building) => {
-      const carried = building.item === 'ammo' ? 1 : 0;
-      return total + building.ammoStored + carried;
-    }, 0);
+    return this.itemInNetwork('ammo');
   }
 
   oreInNetwork(): number {
+    return this.itemInNetwork('ironOre');
+  }
+
+  itemInNetwork(item: ItemType): number {
     return this.grid.allBuildings().reduce((total, building) => {
-      const carried = building.item === 'ore' ? 1 : 0;
-      return total + building.oreStored + carried;
+      const carried = building.item === item ? 1 : 0;
+      return total + building.stored(item) + carried;
     }, 0);
   }
 
   private updateMiner(building: Building, time: number): void {
-    this.tryOutputStored(building, 'ore', time);
+    this.tryOutputAllStored(building, time);
 
     if (time < building.nextWorkAt) {
       return;
     }
 
-    const terrain = this.grid.getTerrain(building.cell);
-    const speedBonus = terrain === 'resource' ? 1 : 1.8;
+    const resource = this.grid.getResource(building.cell);
+    const speedBonus = resource ? 1 : 1.8;
     building.nextWorkAt =
       time + this.scene.modifiers.productionIntervalMs * speedBonus;
 
-    if (terrain === 'resource' && building.oreStored < this.capacity(building, 'ore')) {
-      building.oreStored += 1;
-      building.flash(0xcfe7f3);
-      this.scene.floatText(building.getWorldPosition(), '+鉄', 0xcfe7f3);
-      this.tryOutputStored(building, 'ore', time);
-    }
-  }
-
-  private updateAmmoFactory(building: Building, time: number): void {
-    this.tryOutputStored(building, 'ammo', time);
-
-    if (
-      building.oreStored <= 0 ||
-      building.ammoStored >= this.capacity(building, 'ammo') ||
-      time < building.nextWorkAt
-    ) {
+    if (!resource) {
       return;
     }
 
+    const item = this.resourceItem(resource);
+    if (building.canStore(item)) {
+      building.addStored(item);
+      building.flash(ITEM_DEFS[item].color);
+      this.scene.floatText(building.getWorldPosition(), `+${ITEM_DEFS[item].label}`, ITEM_DEFS[item].color);
+      this.tryOutputStored(building, item, time);
+    }
+  }
+
+  private updateFactory(building: Building, time: number): void {
+    this.tryOutputAllStored(building, time);
+
+    if (time < building.nextWorkAt) {
+      return;
+    }
+
+    const recipes = FACTORY_RECIPES[building.type] ?? [];
+    const candidates = this.rotatedRecipes(recipes, building.nextRecipeIndex);
+    const recipe = candidates.find((candidate) => this.canCraft(building, candidate));
+    if (!recipe) {
+      return;
+    }
+
+    for (const [item, amount] of Object.entries(recipe.inputs) as [ItemType, number][]) {
+      building.removeStored(item, amount);
+    }
+
+    building.addStored(recipe.output, recipe.amount ?? 1);
+    building.nextRecipeIndex = (recipes.indexOf(recipe) + 1) % Math.max(1, recipes.length);
     building.nextWorkAt = time + this.scene.modifiers.productionIntervalMs * 1.15;
-    building.oreStored -= 1;
-    building.ammoStored += 1;
-    building.flash(0xff9d3f);
-    this.scene.floatText(building.getWorldPosition(), '+弾薬', 0xffa65a);
-    this.tryOutputStored(building, 'ammo', time);
+    building.flash(recipe.color);
+    this.scene.floatText(building.getWorldPosition(), `+${recipe.label}`, recipe.color);
+    this.tryOutputStored(building, recipe.output, time);
   }
 
   private updateConveyor(building: Building, time: number): void {
@@ -175,19 +291,23 @@ export class FactorySystem {
       return false;
     }
 
-    const stored = item === 'ore' ? source.oreStored : source.ammoStored;
-    if (stored <= 0 || !this.outputItem(source, item)) {
+    if (source.stored(item) <= 0 || !this.outputItem(source, item)) {
       return false;
     }
 
-    if (item === 'ore') {
-      source.oreStored -= 1;
-    } else {
-      source.ammoStored -= 1;
-    }
-
+    source.removeStored(item);
     source.nextMoveAt = time + this.scene.modifiers.beltIntervalMs;
     return true;
+  }
+
+  private tryOutputAllStored(source: Building, time: number): boolean {
+    for (const item of source.storedItems()) {
+      if (this.tryOutputStored(source, item, time)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private outputItem(source: Building, item: ItemType): boolean {
@@ -287,23 +407,8 @@ export class FactorySystem {
       return true;
     }
 
-    if (
-      (target.type === 'ammoFactory' || target.type === 'core') &&
-      item === 'ore' &&
-      target.oreStored < this.capacity(target, 'ore')
-    ) {
-      target.oreStored += 1;
-      return true;
-    }
-
-    if (
-      (target.type === 'turret' ||
-        target.type === 'ammoFactory' ||
-        target.type === 'core') &&
-      item === 'ammo' &&
-      target.ammoStored < this.capacity(target, 'ammo')
-    ) {
-      target.ammoStored += 1;
+    if (target.canStore(item)) {
+      target.addStored(item);
       target.flash(0x7ddcff);
       return true;
     }
@@ -360,15 +465,7 @@ export class FactorySystem {
       return this.canConveyorReceive(target, source.cell);
     }
 
-    if (item === 'ore') {
-      return target.type === 'ammoFactory' || target.type === 'core';
-    }
-
-    return (
-      target.type === 'turret' ||
-      target.type === 'ammoFactory' ||
-      target.type === 'core'
-    );
+    return storageCapacity(target.type, item) > 0;
   }
 
   private canConveyorReceive(target: Building, sourceCell?: Cell): boolean {
@@ -492,11 +589,7 @@ export class FactorySystem {
       return this.outputDirections(building);
     }
 
-    if (
-      building.type === 'miner' ||
-      building.type === 'ammoFactory' ||
-      building.type === 'core'
-    ) {
+    if (OUTPUT_BUILDINGS.includes(building.type)) {
       return [building.direction];
     }
 
@@ -566,23 +659,37 @@ export class FactorySystem {
     return 'right';
   }
 
-  private capacity(building: Building, item: ItemType): number {
-    if (building.type === 'miner') {
-      return item === 'ore' ? 8 : 0;
+  private rotatedRecipes(
+    recipes: FactoryRecipe[],
+    startIndex: number,
+  ): FactoryRecipe[] {
+    if (recipes.length <= 0) {
+      return [];
     }
 
-    if (building.type === 'ammoFactory') {
-      return item === 'ore' ? 12 : 8;
+    const start = startIndex % recipes.length;
+    return recipes.map((_, offset) => recipes[(start + offset) % recipes.length]);
+  }
+
+  private canCraft(building: Building, recipe: FactoryRecipe): boolean {
+    if (!building.canStore(recipe.output, recipe.amount ?? 1)) {
+      return false;
     }
 
-    if (building.type === 'turret') {
-      return item === 'ammo' ? 36 : 0;
+    return (Object.entries(recipe.inputs) as [ItemType, number][]).every(
+      ([item, amount]) => building.stored(item) >= amount,
+    );
+  }
+
+  private resourceItem(resource: 'iron' | 'copper' | 'oil'): ItemType {
+    if (resource === 'copper') {
+      return 'copperOre';
     }
 
-    if (building.type === 'core') {
-      return 60;
+    if (resource === 'oil') {
+      return 'oil';
     }
 
-    return building.type === 'conveyor' ? 1 : 0;
+    return 'ironOre';
   }
 }

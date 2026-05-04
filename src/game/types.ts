@@ -14,14 +14,47 @@ export const WORLD_VIEW_WIDTH = GAME_WIDTH - WORLD_VIEW_X - 8;
 export const WORLD_VIEW_HEIGHT = 638;
 
 export type Direction = 'up' | 'right' | 'down' | 'left';
-export type Terrain = 'ground' | 'lava' | 'geothermal' | 'resource' | 'ocean';
-export type ItemType = 'ore' | 'ammo';
+export type Terrain =
+  | 'ground'
+  | 'lava'
+  | 'geothermal'
+  | 'resource'
+  | 'resourceCopper'
+  | 'resourceOil'
+  | 'ocean';
+export type ResourceKind = 'iron' | 'copper' | 'oil';
+export type ItemType =
+  | 'ironOre'
+  | 'copperOre'
+  | 'oil'
+  | 'ammo'
+  | 'ironPlate'
+  | 'copperPlate'
+  | 'wire'
+  | 'plastic'
+  | 'fuel'
+  | 'enhancedAmmo'
+  | 'incendiaryAmmo'
+  | 'empAmmo'
+  | 'missile'
+  | 'drone';
 export type BuildingType =
   | 'core'
   | 'miner'
   | 'conveyor'
   | 'ammoFactory'
+  | 'metalPlateFactory'
+  | 'plasticFactory'
+  | 'fuelFactory'
+  | 'specialAmmoFactory'
+  | 'missileFactory'
+  | 'droneFactory'
   | 'turret'
+  | 'sniperTurret'
+  | 'cannonTurret'
+  | 'empTurret'
+  | 'missileTurret'
+  | 'droneTower'
   | 'wall';
 export type EnemyType = 'small' | 'heavy' | 'suicide';
 export type UpgradeId = 'turret' | 'belt' | 'production' | 'repair';
@@ -39,6 +72,7 @@ export interface Cell {
 
 export interface Tile {
   terrain: Terrain;
+  resource?: ResourceKind;
 }
 
 export interface BuildingDefinition {
@@ -62,6 +96,13 @@ export interface ConveyorVariantDefinition {
   label: string;
   shortLabel: string;
   description: string;
+  cost: number;
+}
+
+export interface ItemDefinition {
+  label: string;
+  shortLabel: string;
+  color: number;
 }
 
 export const DIRECTIONS: Direction[] = ['up', 'right', 'down', 'left'];
@@ -86,6 +127,79 @@ export const DIRECTION_ANGLES: Record<Direction, number> = {
   right: 0,
   down: 90,
   left: 180,
+};
+
+export const ITEM_DEFS: Record<ItemType, ItemDefinition> = {
+  ironOre: {
+    label: '鉄',
+    shortLabel: '鉄',
+    color: 0xc7d4dc,
+  },
+  copperOre: {
+    label: '銅',
+    shortLabel: '銅',
+    color: 0xd7863f,
+  },
+  oil: {
+    label: '原油',
+    shortLabel: '油',
+    color: 0x2a1d38,
+  },
+  ammo: {
+    label: '弾',
+    shortLabel: '弾',
+    color: 0xff8d3f,
+  },
+  ironPlate: {
+    label: '鉄板',
+    shortLabel: '鉄板',
+    color: 0xd5e2ea,
+  },
+  copperPlate: {
+    label: '銅板',
+    shortLabel: '銅板',
+    color: 0xe99a54,
+  },
+  wire: {
+    label: 'ワイヤー',
+    shortLabel: '線',
+    color: 0xf4b552,
+  },
+  plastic: {
+    label: 'プラスチック',
+    shortLabel: '樹',
+    color: 0xe5f6ff,
+  },
+  fuel: {
+    label: '燃料',
+    shortLabel: '燃',
+    color: 0xffc34c,
+  },
+  enhancedAmmo: {
+    label: '強化弾',
+    shortLabel: '強',
+    color: 0xffe073,
+  },
+  incendiaryAmmo: {
+    label: '焼夷弾',
+    shortLabel: '焼',
+    color: 0xff6834,
+  },
+  empAmmo: {
+    label: '電磁パルス弾',
+    shortLabel: 'EMP',
+    color: 0x68d7ff,
+  },
+  missile: {
+    label: 'ミサイル',
+    shortLabel: '弾頭',
+    color: 0xfff0a6,
+  },
+  drone: {
+    label: 'ドローン',
+    shortLabel: '機',
+    color: 0x9de8ff,
+  },
 };
 
 export const BUILDING_DEFS: Record<BuildingType, BuildingDefinition> = {
@@ -117,12 +231,89 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDefinition> = {
     maxHp: 170,
     description: '格納した鉄を弾薬に変換',
   },
+  metalPlateFactory: {
+    label: '金属板工場',
+    shortLabel: 'PLATE',
+    cost: 120,
+    maxHp: 170,
+    description: '鉄板、銅板、ワイヤーを製造',
+  },
+  plasticFactory: {
+    label: 'プラスチック工場',
+    shortLabel: 'PLAS',
+    cost: 130,
+    maxHp: 160,
+    description: '原油をプラスチックに加工',
+  },
+  fuelFactory: {
+    label: '燃料工場',
+    shortLabel: 'FUEL',
+    cost: 130,
+    maxHp: 160,
+    description: '原油を燃料に加工',
+  },
+  specialAmmoFactory: {
+    label: '特殊弾工場',
+    shortLabel: 'SPAM',
+    cost: 180,
+    maxHp: 190,
+    description: '強化弾、焼夷弾、EMP弾を製造',
+  },
+  missileFactory: {
+    label: 'ミサイル工場',
+    shortLabel: 'MSL',
+    cost: 240,
+    maxHp: 210,
+    description: '鉄板と燃料からミサイルを製造',
+  },
+  droneFactory: {
+    label: 'ドローン工場',
+    shortLabel: 'DRN',
+    cost: 260,
+    maxHp: 210,
+    description: '素材から戦闘ドローンを製造',
+  },
   turret: {
     label: 'タレット',
     shortLabel: 'GUN',
     cost: 85,
     maxHp: 140,
     description: '自分に弾薬がある時だけ攻撃',
+  },
+  sniperTurret: {
+    label: 'スナイパータレット',
+    shortLabel: 'SNP',
+    cost: 180,
+    maxHp: 130,
+    description: '強化弾で長射程高威力攻撃',
+  },
+  cannonTurret: {
+    label: '大型砲台',
+    shortLabel: 'BOM',
+    cost: 210,
+    maxHp: 170,
+    description: '焼夷弾で範囲攻撃',
+  },
+  empTurret: {
+    label: '電磁砲台',
+    shortLabel: 'EMP',
+    cost: 220,
+    maxHp: 160,
+    description: 'EMP弾で敵を停止',
+  },
+  missileTurret: {
+    label: 'ミサイル砲台',
+    shortLabel: 'MSL',
+    cost: 320,
+    maxHp: 190,
+    description: 'ミサイルで超長射程範囲攻撃',
+  },
+  droneTower: {
+    label: 'ドローン司令塔',
+    shortLabel: 'CTRL',
+    cost: 300,
+    maxHp: 180,
+    description: 'ドローンを発進させる',
   },
   wall: {
     label: '防御壁',
@@ -138,26 +329,31 @@ export const CONVEYOR_DEFS: Record<ConveyorVariant, ConveyorVariantDefinition> =
     label: 'コンベア直進',
     shortLabel: 'I',
     description: '向きの方向へ搬送。曲がりは周囲から自動判定',
+    cost: 10,
   },
   curveDown: {
     label: '自動カーブ 左→下',
     shortLabel: 'L↓',
     description: '左から入り下へ出る',
+    cost: 10,
   },
   curveUp: {
     label: '自動カーブ 左→上',
     shortLabel: 'L↑',
     description: '左から入り上へ出る',
+    cost: 10,
   },
   junctionThree: {
     label: 'T字コンベア',
     shortLabel: 'T',
     description: '3方向を接続。来た方向以外へ自動分配',
+    cost: 15,
   },
   junctionFour: {
     label: '十字コンベア',
     shortLabel: '+',
     description: '4方向を接続。空き方向へ自動分配',
+    cost: 20,
   },
 };
 
@@ -203,6 +399,102 @@ export function neighbor(cell: Cell, direction: Direction): Cell {
 
 export function manhattan(a: Cell, b: Cell): number {
   return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+}
+
+export function storageCapacity(type: BuildingType, item: ItemType): number {
+  if (type === 'core') {
+    return 120;
+  }
+
+  if (type === 'conveyor') {
+    return 1;
+  }
+
+  if (type === 'miner') {
+    return item === 'ironOre' || item === 'copperOre' || item === 'oil' ? 8 : 0;
+  }
+
+  if (type === 'ammoFactory') {
+    if (item === 'ironOre') {
+      return 12;
+    }
+    return item === 'ammo' ? 8 : 0;
+  }
+
+  if (type === 'metalPlateFactory') {
+    return item === 'ironOre' ||
+      item === 'copperOre' ||
+      item === 'ironPlate' ||
+      item === 'copperPlate' ||
+      item === 'wire'
+      ? 12
+      : 0;
+  }
+
+  if (type === 'plasticFactory') {
+    return item === 'oil' || item === 'plastic' ? 12 : 0;
+  }
+
+  if (type === 'fuelFactory') {
+    return item === 'oil' || item === 'fuel' ? 12 : 0;
+  }
+
+  if (type === 'specialAmmoFactory') {
+    return item === 'ironPlate' ||
+      item === 'copperPlate' ||
+      item === 'wire' ||
+      item === 'plastic' ||
+      item === 'fuel' ||
+      item === 'enhancedAmmo' ||
+      item === 'incendiaryAmmo' ||
+      item === 'empAmmo'
+      ? 12
+      : 0;
+  }
+
+  if (type === 'missileFactory') {
+    return item === 'ironPlate' ||
+      item === 'wire' ||
+      item === 'fuel' ||
+      item === 'missile'
+      ? 16
+      : 0;
+  }
+
+  if (type === 'droneFactory') {
+    return item === 'ironPlate' ||
+      item === 'wire' ||
+      item === 'plastic' ||
+      item === 'drone'
+      ? 18
+      : 0;
+  }
+
+  if (type === 'turret') {
+    return item === 'ammo' ? 36 : 0;
+  }
+
+  if (type === 'sniperTurret') {
+    return item === 'enhancedAmmo' ? 18 : 0;
+  }
+
+  if (type === 'cannonTurret') {
+    return item === 'incendiaryAmmo' ? 18 : 0;
+  }
+
+  if (type === 'empTurret') {
+    return item === 'empAmmo' ? 18 : 0;
+  }
+
+  if (type === 'missileTurret') {
+    return item === 'missile' ? 8 : 0;
+  }
+
+  if (type === 'droneTower') {
+    return item === 'drone' ? 6 : 0;
+  }
+
+  return 0;
 }
 
 export function rotateDirection(direction: Direction): Direction {

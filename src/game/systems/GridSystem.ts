@@ -7,6 +7,7 @@ import {
   LEFT_EXPANSION_COLUMNS,
   MAP_ORIGIN_X,
   MAP_ORIGIN_Y,
+  ResourceKind,
   TILE_SIZE,
   Terrain,
   Tile,
@@ -76,6 +77,10 @@ export class GridSystem {
 
   getTerrain(cell: Cell): Terrain {
     return this.tiles[cell.y]?.[cell.x]?.terrain ?? 'lava';
+  }
+
+  getResource(cell: Cell): ResourceKind | null {
+    return this.tiles[cell.y]?.[cell.x]?.resource ?? null;
   }
 
   inBounds(cell: Cell): boolean {
@@ -196,18 +201,27 @@ export class GridSystem {
       old(12, 17),
       old(13, 17),
     ]);
-    const resource = new Set([
+    const iron = new Set([
       '2,9',
       '5,4',
-      '11,12',
       '18,7',
-      '25,15',
-      '31,5',
       old(4, 8),
       old(2, 5),
-      old(4, 14),
       old(6, 16),
+    ]);
+    const copper = new Set([
+      '11,12',
+      '25,15',
+      '31,5',
+      old(4, 14),
       old(15, 6),
+    ]);
+    const oil = new Set([
+      '7,14',
+      '22,10',
+      '34,13',
+      old(10, 8),
+      old(13, 14),
     ]);
     const geothermal = new Set([
       '8,6',
@@ -230,13 +244,26 @@ export class GridSystem {
           terrain = 'ocean';
         } else if (lava.has(key)) {
           terrain = 'lava';
-        } else if (resource.has(key)) {
+        } else if (iron.has(key)) {
           terrain = 'resource';
+        } else if (copper.has(key)) {
+          terrain = 'resourceCopper';
+        } else if (oil.has(key)) {
+          terrain = 'resourceOil';
         } else if (geothermal.has(key)) {
           terrain = 'geothermal';
         }
 
-        row.push({ terrain });
+        const resource =
+          terrain === 'resource'
+            ? 'iron'
+            : terrain === 'resourceCopper'
+              ? 'copper'
+              : terrain === 'resourceOil'
+                ? 'oil'
+                : undefined;
+
+        row.push({ terrain, resource });
       }
       this.tiles.push(row);
     }

@@ -6,6 +6,8 @@ export class Bullet {
   private target: Enemy | null = null;
   private damage = 0;
   private speed = 360;
+  private color = 0xffcf65;
+  private onHit: ((target: Enemy, position: Phaser.Math.Vector2) => void) | null = null;
   private readonly body: Phaser.GameObjects.Rectangle;
 
   constructor(private readonly scene: Phaser.Scene) {
@@ -26,10 +28,13 @@ export class Bullet {
     target: Enemy,
     damage: number,
     color = 0xffcf65,
+    onHit: ((target: Enemy, position: Phaser.Math.Vector2) => void) | null = null,
   ): void {
     this.active = true;
     this.target = target;
     this.damage = damage;
+    this.color = color;
+    this.onHit = onHit;
     this.body
       .setPosition(x, y)
       .setFillStyle(color, 1)
@@ -61,8 +66,12 @@ export class Bullet {
     const step = (this.speed * delta) / 1000;
 
     if (distance <= step + 4) {
-      this.target.damage(this.damage);
-      this.scene.events.emit('bullet-hit', targetPosition.x, targetPosition.y);
+      if (this.onHit) {
+        this.onHit(this.target, targetPosition);
+      } else {
+        this.target.damage(this.damage);
+      }
+      this.scene.events.emit('bullet-hit', targetPosition.x, targetPosition.y, this.color);
       this.deactivate();
       return true;
     }
@@ -75,6 +84,7 @@ export class Bullet {
   deactivate(): void {
     this.active = false;
     this.target = null;
+    this.onHit = null;
     this.body.setActive(false).setVisible(false).setPosition(-100, -100);
   }
 }

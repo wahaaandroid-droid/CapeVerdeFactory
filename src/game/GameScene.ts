@@ -3,6 +3,7 @@ import generatedConveyorsUrl from '../../assets/sprites/generated-conveyors.png'
 import generatedSpritesUrl from '../../assets/sprites/generated-sprites.png';
 import { Bullet } from './entities/Bullet';
 import { Building } from './entities/Building';
+import { CombatDrone } from './entities/CombatDrone';
 import { Enemy } from './entities/Enemy';
 import { FactorySystem } from './systems/FactorySystem';
 import { GridSystem } from './systems/GridSystem';
@@ -22,6 +23,7 @@ import {
   GAME_WIDTH,
   GRID_HEIGHT,
   GRID_WIDTH,
+  ItemType,
   LEFT_EXPANSION_COLUMNS,
   MAP_HEIGHT_PX,
   MAP_ORIGIN_X,
@@ -54,7 +56,7 @@ const BUILD_OPTIONS: BuildOption[] = [
     id: 'miner',
     type: 'miner',
     label: '採掘機',
-    detail: '資源から鉄を生成',
+    detail: '資源を採掘',
     iconKey: 'building-miner',
   },
   {
@@ -89,11 +91,88 @@ const BUILD_OPTIONS: BuildOption[] = [
     iconKey: 'building-ammoFactory',
   },
   {
+    id: 'metalPlateFactory',
+    type: 'metalPlateFactory',
+    label: '金属板工場',
+    detail: '鉄板/銅板/線',
+    iconKey: 'building-metalPlateFactory',
+  },
+  {
+    id: 'plasticFactory',
+    type: 'plasticFactory',
+    label: 'プラスチック工場',
+    detail: '原油→樹脂',
+    iconKey: 'building-plasticFactory',
+  },
+  {
+    id: 'fuelFactory',
+    type: 'fuelFactory',
+    label: '燃料工場',
+    detail: '原油→燃料',
+    iconKey: 'building-fuelFactory',
+  },
+  {
+    id: 'specialAmmoFactory',
+    type: 'specialAmmoFactory',
+    label: '特殊弾工場',
+    detail: '強/焼/EMP弾',
+    iconKey: 'building-specialAmmoFactory',
+  },
+  {
+    id: 'missileFactory',
+    type: 'missileFactory',
+    label: 'ミサイル工場',
+    detail: '素材→弾頭',
+    iconKey: 'building-missileFactory',
+  },
+  {
+    id: 'droneFactory',
+    type: 'droneFactory',
+    label: 'ドローン工場',
+    detail: '素材→機体',
+    iconKey: 'building-droneFactory',
+  },
+  {
     id: 'turret',
     type: 'turret',
     label: 'タレット',
     detail: '弾を消費して攻撃',
     iconKey: 'building-turret',
+  },
+  {
+    id: 'sniperTurret',
+    type: 'sniperTurret',
+    label: 'スナイパー',
+    detail: '強化弾・長射程',
+    iconKey: 'building-sniperTurret',
+  },
+  {
+    id: 'cannonTurret',
+    type: 'cannonTurret',
+    label: '大型砲台',
+    detail: '焼夷弾・範囲',
+    iconKey: 'building-cannonTurret',
+  },
+  {
+    id: 'empTurret',
+    type: 'empTurret',
+    label: '電磁砲台',
+    detail: 'EMP弾・停止',
+    iconKey: 'building-empTurret',
+  },
+  {
+    id: 'missileTurret',
+    type: 'missileTurret',
+    label: 'ミサイル砲台',
+    detail: '弾頭・超長射程',
+    iconKey: 'building-missileTurret',
+  },
+  {
+    id: 'droneTower',
+    type: 'droneTower',
+    label: 'ドローン司令塔',
+    detail: '機体を発進',
+    iconKey: 'building-droneTower',
   },
   {
     id: 'wall',
@@ -103,6 +182,65 @@ const BUILD_OPTIONS: BuildOption[] = [
     iconKey: 'building-wall',
   },
 ];
+
+type WeaponBuildingType =
+  | 'turret'
+  | 'sniperTurret'
+  | 'cannonTurret'
+  | 'empTurret'
+  | 'missileTurret';
+
+interface WeaponConfig {
+  ammo: ItemType;
+  rangeMultiplier: number;
+  damageMultiplier: number;
+  fireIntervalMultiplier: number;
+  color: number;
+  radius?: number;
+  stunMs?: number;
+}
+
+const WEAPON_CONFIGS: Record<WeaponBuildingType, WeaponConfig> = {
+  turret: {
+    ammo: 'ammo',
+    rangeMultiplier: 1,
+    damageMultiplier: 1,
+    fireIntervalMultiplier: 1,
+    color: 0xffcf65,
+  },
+  sniperTurret: {
+    ammo: 'enhancedAmmo',
+    rangeMultiplier: 3,
+    damageMultiplier: 3,
+    fireIntervalMultiplier: 4,
+    color: 0xffe073,
+  },
+  cannonTurret: {
+    ammo: 'incendiaryAmmo',
+    rangeMultiplier: 2,
+    damageMultiplier: 1.6,
+    fireIntervalMultiplier: 1.7,
+    color: 0xff6834,
+    radius: 72,
+  },
+  empTurret: {
+    ammo: 'empAmmo',
+    rangeMultiplier: 2,
+    damageMultiplier: 0,
+    fireIntervalMultiplier: 2.2,
+    color: 0x68d7ff,
+    radius: 78,
+    stunMs: 3000,
+  },
+  missileTurret: {
+    ammo: 'missile',
+    rangeMultiplier: 5,
+    damageMultiplier: 10,
+    fireIntervalMultiplier: 10,
+    color: 0xfff0a6,
+    radius: 96,
+  },
+};
 
 type InteractionMode = 'build' | 'move' | 'demolish';
 
@@ -132,6 +270,7 @@ export class GameScene extends Phaser.Scene {
   private movingBuilding: Building | null = null;
   private readonly enemies: Enemy[] = [];
   private readonly bullets: Bullet[] = [];
+  private readonly drones: CombatDrone[] = [];
   private preview!: Phaser.GameObjects.Graphics;
   private buildButtons: BuildButton[] = [];
   private worldCamera!: Phaser.Cameras.Scene2D.Camera;
@@ -210,6 +349,8 @@ export class GameScene extends Phaser.Scene {
 
     this.factory.update(time);
     this.updateTurrets(time);
+    this.updateDroneTowers(time);
+    this.updateDrones(time, delta);
     this.enemies.forEach((enemy) => enemy.update(time, delta));
     this.bullets.forEach((bullet) => bullet.update(delta));
     this.wave.update(time);
@@ -507,6 +648,10 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < 96; i += 1) {
       this.bullets.push(new Bullet(this));
     }
+
+    for (let i = 0; i < 18; i += 1) {
+      this.drones.push(new CombatDrone(this));
+    }
   }
 
   private createInput(): void {
@@ -607,8 +752,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createHitEvents(): void {
-    this.events.on('bullet-hit', (x: number, y: number) => {
-      const flash = this.add.circle(x, y, 5, 0xffd873, 0.9).setDepth(65);
+    this.events.on('bullet-hit', (x: number, y: number, color = 0xffd873) => {
+      const flash = this.add.circle(x, y, 5, color, 0.9).setDepth(65);
       this.registerWorldObject(flash);
       this.tweens.add({
         targets: flash,
@@ -779,12 +924,12 @@ export class GameScene extends Phaser.Scene {
     );
 
     const moveButton = this.add
-      .rectangle(118, 624, 178, 34, 0x22343c, 1)
+      .rectangle(WORLD_VIEW_X + WORLD_VIEW_WIDTH - 102, lowerPanelY + 35, 148, 28, 0x22343c, 1)
       .setStrokeStyle(2, 0x78f2d6, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const moveText = this.add
-      .text(118, 624, '移設モード', {
+      .text(WORLD_VIEW_X + WORLD_VIEW_WIDTH - 102, lowerPanelY + 35, '移設モード', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '15px',
         color: '#ffffff',
@@ -807,12 +952,12 @@ export class GameScene extends Phaser.Scene {
     );
 
     const demolishButton = this.add
-      .rectangle(118, 666, 178, 34, 0x3a2a24, 1)
+      .rectangle(WORLD_VIEW_X + WORLD_VIEW_WIDTH - 102, lowerPanelY + 70, 148, 28, 0x3a2a24, 1)
       .setStrokeStyle(2, 0xffa35c, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const demolishText = this.add
-      .text(118, 666, '解体モード', {
+      .text(WORLD_VIEW_X + WORLD_VIEW_WIDTH - 102, lowerPanelY + 70, '解体モード', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '15px',
         color: '#ffffff',
@@ -839,8 +984,8 @@ export class GameScene extends Phaser.Scene {
       phase: this.addText(24, 70, '', 18, '#e6eef4'),
       core: this.addText(24, 108, '', 18, '#7fdcff'),
       parts: this.addText(24, 142, '', 17, '#d6e3eb'),
-      ore: this.addText(24, 172, '', 17, '#d6e3eb'),
-      ammo: this.addText(118, 172, '', 17, '#ffb174'),
+      ore: this.addText(24, 172, '', 15, '#d6e3eb'),
+      ammo: this.addText(24, 198, '', 13, '#ffb174'),
       controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き/施設上で向き変更  M:移設  X:解体', 14, '#fff3cc', true),
       selected: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 56, '', 13, '#e6eef4'),
       status: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 80, this.statusMessage, 14, '#fff0c4'),
@@ -861,20 +1006,19 @@ export class GameScene extends Phaser.Scene {
 
   private createBuildMenu(): void {
     BUILD_OPTIONS.forEach((option, index) => {
-      const definition = BUILDING_DEFS[option.type];
-      const y = 304 + index * 34;
+      const y = 292 + index * 25;
       const box = this.add
-        .rectangle(118, y, 178, 30, 0x151a20, 1)
+        .rectangle(118, y, 178, 23, 0x151a20, 1)
         .setOrigin(0.5)
         .setStrokeStyle(2, this.isBuildOptionSelected(option) ? 0xffd16a : 0x55606a, 1)
         .setDepth(100)
         .setInteractive({ useHandCursor: true });
       this.add
         .sprite(40, y, option.iconKey)
-        .setDisplaySize(22, 22)
+        .setDisplaySize(18, 18)
         .setDepth(101);
-      this.addText(58, y - 13, option.label, 11, '#e8edf2', true);
-      this.addText(58, y, `${option.detail} / ${definition.cost}`, 9, '#cfd8df');
+      this.addText(56, y - 11, option.label, 9, '#e8edf2', true);
+      this.addText(56, y, `${option.detail} / ${this.buildOptionCost(option)}`, 7, '#cfd8df');
 
       box.on(
         'pointerdown',
@@ -897,12 +1041,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateTurrets(time: number): void {
-    const turrets = this.factory.getBuildings('turret');
+    const turrets = this.factory
+      .getBuildings()
+      .filter((building): building is Building & { type: WeaponBuildingType } =>
+        this.isWeaponBuilding(building.type),
+      );
 
     for (const turret of turrets) {
+      const config = WEAPON_CONFIGS[turret.type];
       if (
         !turret.alive ||
-        turret.ammoStored <= 0 ||
+        turret.stored(config.ammo) <= 0 ||
         time < turret.nextFireAt
       ) {
         continue;
@@ -914,20 +1063,105 @@ export class GameScene extends Phaser.Scene {
         turretPosition.y,
         turret.direction,
       );
-      const target = this.findNearestEnemy(rangeCenter, this.modifiers.turretRange);
+      const target = this.findNearestEnemy(rangeCenter, this.weaponRange(turret.type));
 
       if (!target) {
         continue;
       }
 
-      turret.nextFireAt = time + 560;
-      turret.ammoStored -= 1;
+      turret.nextFireAt = time + 560 * config.fireIntervalMultiplier;
+      turret.removeStored(config.ammo);
       turret.flash(0xffe0a3);
       this.playTurretShotSound();
       const bullet = this.bullets.find((candidate) => !candidate.active) ?? this.addBullet();
       const position = turret.getWorldPosition();
-      bullet.fire(position.x, position.y, target, this.modifiers.turretDamage);
+      bullet.fire(
+        position.x,
+        position.y,
+        target,
+        this.modifiers.turretDamage * config.damageMultiplier,
+        config.color,
+        config.radius || config.stunMs
+          ? (_target, hitPosition) => {
+              this.affectEnemiesArea(
+                hitPosition,
+                config.radius ?? 20,
+                this.modifiers.turretDamage * config.damageMultiplier,
+                config.stunMs ?? 0,
+                config.color,
+              );
+            }
+          : null,
+      );
     }
+  }
+
+  private updateDroneTowers(time: number): void {
+    for (const tower of this.factory.getBuildings('droneTower')) {
+      if (
+        !tower.alive ||
+        tower.stored('drone') <= 0 ||
+        time < tower.nextFireAt ||
+        !this.hasActiveEnemies()
+      ) {
+        continue;
+      }
+
+      const drone = this.drones.find((candidate) => !candidate.active);
+      if (!drone) {
+        continue;
+      }
+
+      tower.removeStored('drone');
+      tower.nextFireAt = time + 2600;
+      tower.flash(0x9de8ff);
+      const position = tower.getWorldPosition();
+      drone.launch(position.x, position.y);
+      this.floatText(position, 'ドローン発進', 0x9de8ff);
+    }
+  }
+
+  private updateDrones(time: number, delta: number): void {
+    for (const drone of this.drones) {
+      drone.update(
+        time,
+        delta,
+        this.findNearestEnemy(drone.getWorldPosition(), Number.POSITIVE_INFINITY),
+        (x, y, target) => {
+          const bullet = this.bullets.find((candidate) => !candidate.active) ?? this.addBullet();
+          bullet.fire(x, y, target, this.modifiers.turretDamage * 0.45, 0x9de8ff);
+        },
+      );
+    }
+  }
+
+  private affectEnemiesArea(
+    position: Phaser.Math.Vector2,
+    radius: number,
+    damage: number,
+    stunMs: number,
+    color: number,
+  ): void {
+    for (const enemy of this.enemies) {
+      if (!enemy.active) {
+        continue;
+      }
+
+      const enemyPosition = enemy.getWorldPosition();
+      if (Phaser.Math.Distance.Between(position.x, position.y, enemyPosition.x, enemyPosition.y) > radius) {
+        continue;
+      }
+
+      if (damage > 0) {
+        enemy.damage(damage);
+      }
+
+      if (stunMs > 0) {
+        enemy.stun(stunMs);
+      }
+    }
+
+    this.explosion(position, color, Math.max(0.75, radius / 80));
   }
 
   private findNearestEnemy(
@@ -975,12 +1209,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (this.selectedBuild === 'miner' && this.grid.getTerrain(cell) !== 'resource') {
-      this.setStatus('採掘機は資源ノードに設置');
+    if (this.selectedBuild === 'miner' && !this.grid.getResource(cell)) {
+      this.setStatus('採掘機は鉄/銅/原油ノードに設置');
       return;
     }
 
-    const cost = BUILDING_DEFS[this.selectedBuild].cost;
+    const cost = this.buildCost(this.selectedBuild, this.selectedConveyorVariant);
     if (this.parts < cost) {
       this.setStatus('建材が不足');
       return;
@@ -1109,7 +1343,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const refund = BUILDING_DEFS[building.type].cost;
+    const refund = this.buildCost(building.type, building.conveyorVariant);
     const position = building.getWorldPosition();
     this.parts += refund;
     this.factory.removeBuilding(building);
@@ -1136,6 +1370,26 @@ export class GameScene extends Phaser.Scene {
       option.type === this.selectedBuild &&
       (option.conveyorVariant ?? 'straight') === this.selectedConveyorVariant
     );
+  }
+
+  private buildOptionCost(option: BuildOption): number {
+    return this.buildCost(option.type, option.conveyorVariant ?? 'straight');
+  }
+
+  private buildCost(type: BuildingType, conveyorVariant: ConveyorVariant = 'straight'): number {
+    if (type === 'conveyor') {
+      return CONVEYOR_DEFS[conveyorVariant].cost;
+    }
+
+    return BUILDING_DEFS[type].cost;
+  }
+
+  private isWeaponBuilding(type: BuildingType): type is WeaponBuildingType {
+    return Object.prototype.hasOwnProperty.call(WEAPON_CONFIGS, type);
+  }
+
+  private weaponRange(type: WeaponBuildingType): number {
+    return this.modifiers.turretRange * WEAPON_CONFIGS[type].rangeMultiplier;
   }
 
   private cycleMode(): void {
@@ -1171,15 +1425,17 @@ export class GameScene extends Phaser.Scene {
     centerY: number,
     direction: Direction,
     valid = true,
+    buildingType: WeaponBuildingType = 'turret',
   ): void {
     const color = valid ? 0x7ddcff : 0xff4d3d;
     const rangeCenter = this.turretRangeCenter(centerX, centerY, direction);
+    const range = this.weaponRange(buildingType);
     this.preview.fillStyle(color, 0.08);
-    this.preview.fillCircle(rangeCenter.x, rangeCenter.y, this.modifiers.turretRange);
+    this.preview.fillCircle(rangeCenter.x, rangeCenter.y, range);
     this.preview.lineStyle(1, color, 0.45);
     this.preview.lineBetween(centerX, centerY, rangeCenter.x, rangeCenter.y);
     this.preview.lineStyle(2, color, 0.62);
-    this.preview.strokeCircle(rangeCenter.x, rangeCenter.y, this.modifiers.turretRange);
+    this.preview.strokeCircle(rangeCenter.x, rangeCenter.y, range);
   }
 
   private turretRangeCenter(
@@ -1243,12 +1499,13 @@ export class GameScene extends Phaser.Scene {
       const canRotate = existing.type !== 'core' && this.wave.state === 'preparation';
       this.preview.lineStyle(2, canRotate ? 0x7ddcff : 0xff4d3d, 0.95);
       this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
-      if (existing.type === 'turret') {
+      if (this.isWeaponBuilding(existing.type)) {
         this.drawTurretRange(
           x + TILE_SIZE / 2,
           y + TILE_SIZE / 2,
           existing.direction,
           canRotate,
+          existing.type,
         );
       }
       return;
@@ -1257,15 +1514,15 @@ export class GameScene extends Phaser.Scene {
     const valid =
       this.wave.state === 'preparation' &&
       this.grid.isBuildable(cell) &&
-      (this.selectedBuild !== 'miner' || this.grid.getTerrain(cell) === 'resource') &&
-      this.parts >= BUILDING_DEFS[this.selectedBuild].cost;
+      (this.selectedBuild !== 'miner' || Boolean(this.grid.getResource(cell))) &&
+      this.parts >= this.buildCost(this.selectedBuild, this.selectedConveyorVariant);
     this.preview.lineStyle(2, valid ? 0x7dff9f : 0xff4d3d, 0.95);
     this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
 
     const centerX = x + TILE_SIZE / 2;
     const centerY = y + TILE_SIZE / 2;
-    if (this.selectedBuild === 'turret') {
-      this.drawTurretRange(centerX, centerY, this.direction, valid);
+    if (this.isWeaponBuilding(this.selectedBuild)) {
+      this.drawTurretRange(centerX, centerY, this.direction, valid, this.selectedBuild);
       this.preview.lineStyle(2, valid ? 0x7dff9f : 0xff4d3d, 0.95);
       this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
     }
@@ -1297,8 +1554,12 @@ export class GameScene extends Phaser.Scene {
     this.ui.phase.setText(phaseText);
     this.ui.core.setText(`コアHP ${this.core.hp}/${this.core.maxHp}`);
     this.ui.parts.setText(`建材 ${Math.floor(this.parts)}`);
-    this.ui.ore.setText(`鉄 ${this.factory.oreInNetwork()}`);
-    this.ui.ammo.setText(`弾 ${this.factory.ammoInNetwork()}`);
+    this.ui.ore.setText(
+      `鉄 ${this.factory.itemInNetwork('ironOre')}  銅 ${this.factory.itemInNetwork('copperOre')}  油 ${this.factory.itemInNetwork('oil')}`,
+    );
+    this.ui.ammo.setText(
+      `弾 ${this.factory.ammoInNetwork()}  強 ${this.factory.itemInNetwork('enhancedAmmo')}  焼 ${this.factory.itemInNetwork('incendiaryAmmo')}  EMP ${this.factory.itemInNetwork('empAmmo')}`,
+    );
     const buildLabel =
       this.selectedBuild === 'conveyor'
         ? CONVEYOR_DEFS[this.selectedConveyorVariant].label

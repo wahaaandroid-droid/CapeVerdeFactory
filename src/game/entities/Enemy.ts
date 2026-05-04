@@ -21,6 +21,7 @@ export class Enemy {
   private damageValue = 10;
   private reward = 10;
   private nextAttackAt = 0;
+  private stunnedUntil = 0;
 
   private readonly container: Phaser.GameObjects.Container;
   private readonly body: Phaser.GameObjects.Sprite;
@@ -57,6 +58,7 @@ export class Enemy {
     this.damageValue = Math.round(definition.damage * (1 + wave * 0.12));
     this.reward = Math.round(definition.reward * waveScale);
     this.nextAttackAt = 0;
+    this.stunnedUntil = 0;
 
     this.body.setTexture(`enemy-${type}`).clearTint();
     this.container.setPosition(world.x, world.y).setVisible(true).setAlpha(1);
@@ -66,6 +68,16 @@ export class Enemy {
   update(time: number, delta: number): void {
     if (!this.active) {
       return;
+    }
+
+    if (time < this.stunnedUntil) {
+      this.body.setTint(Math.floor(time / 160) % 2 === 0 ? 0x67d9ff : 0xe8fbff);
+      return;
+    }
+
+    if (this.stunnedUntil > 0) {
+      this.stunnedUntil = 0;
+      this.body.clearTint();
     }
 
     if (this.attackTarget) {
@@ -128,6 +140,15 @@ export class Enemy {
       this.container.setVisible(false).setPosition(-100, -100);
       this.scene.onEnemyKilled(this.reward, this.getWorldPosition());
     }
+  }
+
+  stun(durationMs: number): void {
+    if (!this.active) {
+      return;
+    }
+
+    this.stunnedUntil = Math.max(this.stunnedUntil, this.scene.time.now + durationMs);
+    this.body.setTint(0x67d9ff);
   }
 
   getWorldPosition(): Phaser.Math.Vector2 {

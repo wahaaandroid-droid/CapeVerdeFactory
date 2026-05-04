@@ -69,6 +69,27 @@ export function createPixelTextures(scene: Phaser.Scene): void {
     graphics.fillRect(14, 9, 2, 2);
   });
 
+  makeTexture(scene, 'tile-resourceCopper', TILE_SIZE, TILE_SIZE, (graphics) => {
+    tileFrame(graphics, 0x332d2a, 0x7a5a42);
+    graphics.fillStyle(0xa95f33, 1);
+    graphics.fillRect(6, 17, 7, 5);
+    graphics.fillRect(14, 9, 6, 6);
+    graphics.fillRect(22, 18, 5, 4);
+    graphics.fillStyle(0xffc078, 1);
+    graphics.fillRect(8, 16, 2, 2);
+    graphics.fillRect(16, 8, 2, 2);
+  });
+
+  makeTexture(scene, 'tile-resourceOil', TILE_SIZE, TILE_SIZE, (graphics) => {
+    tileFrame(graphics, 0x20232b, 0x4d5566);
+    graphics.fillStyle(0x090b13, 1);
+    graphics.fillRect(7, 15, 18, 9);
+    graphics.fillRect(12, 10, 10, 6);
+    graphics.fillStyle(0x2439a0, 1);
+    graphics.fillRect(10, 17, 5, 2);
+    graphics.fillRect(17, 12, 3, 2);
+  });
+
   makeTexture(scene, 'tile-ocean', TILE_SIZE, TILE_SIZE, (graphics) => {
     tileFrame(graphics, 0x093446, 0x0c5a72);
     graphics.fillStyle(0x0a6d86, 1);
@@ -131,6 +152,86 @@ export function createPixelTextures(scene: Phaser.Scene): void {
     graphics.strokeRect(5, 8, 20, 18);
   });
 
+  makeTexture(scene, 'building-metalPlateFactory', 30, 30, (graphics) => {
+    graphics.fillStyle(0x262b2d, 1);
+    graphics.fillRect(4, 8, 22, 18);
+    graphics.fillStyle(0x8b969d, 1);
+    graphics.fillRect(7, 11, 16, 4);
+    graphics.fillRect(7, 18, 16, 4);
+    graphics.fillStyle(0xe08d4d, 1);
+    graphics.fillRect(11, 5, 8, 5);
+    graphics.lineStyle(2, 0xaab7bf, 1);
+    graphics.strokeRect(4, 8, 22, 18);
+  });
+
+  makeTexture(scene, 'building-plasticFactory', 30, 30, (graphics) => {
+    graphics.fillStyle(0x202932, 1);
+    graphics.fillRect(5, 8, 20, 18);
+    graphics.fillStyle(0xe9f7ff, 1);
+    graphics.fillRect(9, 15, 12, 6);
+    graphics.fillStyle(0x5dd6ff, 1);
+    graphics.fillRect(11, 5, 8, 8);
+    graphics.fillStyle(0x64717a, 1);
+    graphics.fillRect(20, 3, 4, 10);
+    graphics.lineStyle(2, 0x9ab8c8, 1);
+    graphics.strokeRect(5, 8, 20, 18);
+  });
+
+  makeTexture(scene, 'building-fuelFactory', 30, 30, (graphics) => {
+    graphics.fillStyle(0x2f261e, 1);
+    graphics.fillRect(5, 9, 20, 17);
+    graphics.fillStyle(0xffb53d, 1);
+    graphics.fillRect(10, 6, 10, 14);
+    graphics.fillStyle(0x111421, 1);
+    graphics.fillRect(12, 8, 6, 9);
+    graphics.fillStyle(0xffdf78, 1);
+    graphics.fillRect(13, 20, 4, 4);
+    graphics.lineStyle(2, 0xa0713d, 1);
+    graphics.strokeRect(5, 9, 20, 17);
+  });
+
+  makeTexture(scene, 'building-specialAmmoFactory', 30, 30, (graphics) => {
+    graphics.fillStyle(0x252a34, 1);
+    graphics.fillRect(4, 8, 22, 18);
+    graphics.fillStyle(0x52cfff, 1);
+    graphics.fillRect(8, 5, 4, 8);
+    graphics.fillStyle(0xff7138, 1);
+    graphics.fillRect(13, 5, 4, 8);
+    graphics.fillStyle(0xffdc68, 1);
+    graphics.fillRect(18, 5, 4, 8);
+    graphics.fillStyle(0x727c86, 1);
+    graphics.fillRect(8, 18, 14, 4);
+    graphics.lineStyle(2, 0x8e98a6, 1);
+    graphics.strokeRect(4, 8, 22, 18);
+  });
+
+  makeTexture(scene, 'building-missileFactory', 30, 30, (graphics) => {
+    graphics.fillStyle(0x292d30, 1);
+    graphics.fillRect(5, 8, 20, 18);
+    graphics.fillStyle(0xffe88a, 1);
+    graphics.fillTriangle(15, 3, 21, 15, 9, 15);
+    graphics.fillStyle(0x707a84, 1);
+    graphics.fillRect(10, 15, 10, 9);
+    graphics.fillStyle(0xff7438, 1);
+    graphics.fillRect(12, 23, 6, 3);
+    graphics.lineStyle(2, 0xa1a9ad, 1);
+    graphics.strokeRect(5, 8, 20, 18);
+  });
+
+  makeTexture(scene, 'building-droneFactory', 30, 30, (graphics) => {
+    graphics.fillStyle(0x20272f, 1);
+    graphics.fillRect(5, 9, 20, 16);
+    graphics.fillStyle(0x87e8ff, 1);
+    graphics.fillRect(12, 11, 6, 6);
+    graphics.fillStyle(0x6b747d, 1);
+    graphics.fillRect(7, 6, 5, 5);
+    graphics.fillRect(18, 6, 5, 5);
+    graphics.fillRect(7, 20, 5, 5);
+    graphics.fillRect(18, 20, 5, 5);
+    graphics.lineStyle(2, 0x92a0aa, 1);
+    graphics.strokeRect(5, 9, 20, 16);
+  });
+
   makeTexture(scene, 'building-turret', 30, 30, (graphics) => {
     graphics.fillStyle(0x25282b, 1);
     graphics.fillRect(8, 13, 14, 12);
@@ -143,6 +244,67 @@ export function createPixelTextures(scene: Phaser.Scene): void {
     graphics.fillRect(26, 10, 2, 4);
     graphics.lineStyle(2, 0x87919b, 1);
     graphics.strokeRect(8, 13, 14, 12);
+  });
+
+  makeTexture(scene, 'building-sniperTurret', 30, 30, (graphics) => {
+    graphics.fillStyle(0x1f252b, 1);
+    graphics.fillRect(9, 14, 12, 11);
+    graphics.fillStyle(0x617080, 1);
+    graphics.fillRect(12, 9, 7, 7);
+    graphics.fillRect(17, 11, 12, 3);
+    graphics.fillStyle(0xffe073, 1);
+    graphics.fillRect(27, 11, 2, 3);
+    graphics.lineStyle(2, 0x9aa8b5, 1);
+    graphics.strokeRect(9, 14, 12, 11);
+  });
+
+  makeTexture(scene, 'building-cannonTurret', 30, 30, (graphics) => {
+    graphics.fillStyle(0x2b2927, 1);
+    graphics.fillRect(7, 13, 16, 13);
+    graphics.fillStyle(0x5f6870, 1);
+    graphics.fillRect(10, 8, 10, 8);
+    graphics.fillRect(18, 9, 10, 6);
+    graphics.fillStyle(0xff6834, 1);
+    graphics.fillRect(26, 10, 3, 4);
+    graphics.lineStyle(2, 0xa28d7a, 1);
+    graphics.strokeRect(7, 13, 16, 13);
+  });
+
+  makeTexture(scene, 'building-empTurret', 30, 30, (graphics) => {
+    graphics.fillStyle(0x1d2832, 1);
+    graphics.fillRect(8, 13, 14, 12);
+    graphics.fillStyle(0x68d7ff, 1);
+    graphics.fillRect(12, 8, 7, 7);
+    graphics.fillRect(19, 10, 8, 4);
+    graphics.fillStyle(0xd5fbff, 1);
+    graphics.fillRect(14, 10, 3, 3);
+    graphics.lineStyle(2, 0x84cce4, 1);
+    graphics.strokeRect(8, 13, 14, 12);
+  });
+
+  makeTexture(scene, 'building-missileTurret', 30, 30, (graphics) => {
+    graphics.fillStyle(0x25292c, 1);
+    graphics.fillRect(7, 14, 16, 11);
+    graphics.fillStyle(0x6e777f, 1);
+    graphics.fillRect(10, 8, 5, 10);
+    graphics.fillRect(16, 8, 5, 10);
+    graphics.fillStyle(0xffe88a, 1);
+    graphics.fillRect(11, 5, 3, 5);
+    graphics.fillRect(17, 5, 3, 5);
+    graphics.lineStyle(2, 0xb3b6a8, 1);
+    graphics.strokeRect(7, 14, 16, 11);
+  });
+
+  makeTexture(scene, 'building-droneTower', 30, 30, (graphics) => {
+    graphics.fillStyle(0x18242e, 1);
+    graphics.fillRect(8, 11, 14, 14);
+    graphics.fillStyle(0x7fe8ff, 1);
+    graphics.fillRect(12, 6, 6, 6);
+    graphics.fillStyle(0x4d5a65, 1);
+    graphics.fillRect(5, 18, 20, 4);
+    graphics.fillRect(13, 10, 4, 14);
+    graphics.lineStyle(2, 0x7aaec0, 1);
+    graphics.strokeRect(8, 11, 14, 14);
   });
 
   makeTexture(scene, 'building-wall', 30, 30, (graphics) => {
@@ -213,6 +375,102 @@ export function createPixelTextures(scene: Phaser.Scene): void {
     graphics.fillRect(4, 1, 2, 2);
     graphics.fillStyle(0x602312, 1);
     graphics.fillRect(3, 7, 4, 2);
+  });
+
+  makeTexture(scene, 'item-ironOre', 10, 10, (graphics) => {
+    graphics.fillStyle(0xb8c5ce, 1);
+    graphics.fillRect(2, 4, 6, 4);
+    graphics.fillRect(4, 2, 3, 2);
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillRect(3, 3, 2, 2);
+  });
+
+  makeTexture(scene, 'item-copperOre', 10, 10, (graphics) => {
+    graphics.fillStyle(0xc46d36, 1);
+    graphics.fillRect(2, 4, 6, 4);
+    graphics.fillRect(4, 2, 3, 2);
+    graphics.fillStyle(0xffc184, 1);
+    graphics.fillRect(3, 3, 2, 2);
+  });
+
+  makeTexture(scene, 'item-oil', 10, 10, (graphics) => {
+    graphics.fillStyle(0x0b0c15, 1);
+    graphics.fillRect(2, 3, 6, 5);
+    graphics.fillStyle(0x4251c8, 1);
+    graphics.fillRect(3, 4, 3, 1);
+  });
+
+  makeTexture(scene, 'item-ironPlate', 10, 10, (graphics) => {
+    graphics.fillStyle(0xd5e2ea, 1);
+    graphics.fillRect(2, 3, 6, 5);
+    graphics.fillStyle(0x82909a, 1);
+    graphics.fillRect(2, 7, 6, 1);
+  });
+
+  makeTexture(scene, 'item-copperPlate', 10, 10, (graphics) => {
+    graphics.fillStyle(0xe99a54, 1);
+    graphics.fillRect(2, 3, 6, 5);
+    graphics.fillStyle(0x914d2b, 1);
+    graphics.fillRect(2, 7, 6, 1);
+  });
+
+  makeTexture(scene, 'item-wire', 10, 10, (graphics) => {
+    graphics.lineStyle(2, 0xf4b552, 1);
+    graphics.strokeCircle(5, 5, 3);
+    graphics.fillStyle(0x5f351a, 1);
+    graphics.fillRect(4, 4, 2, 2);
+  });
+
+  makeTexture(scene, 'item-plastic', 10, 10, (graphics) => {
+    graphics.fillStyle(0xe5f6ff, 1);
+    graphics.fillRect(2, 3, 6, 5);
+    graphics.fillStyle(0x8ddfff, 1);
+    graphics.fillRect(3, 4, 4, 1);
+  });
+
+  makeTexture(scene, 'item-fuel', 10, 10, (graphics) => {
+    graphics.fillStyle(0xffc34c, 1);
+    graphics.fillRect(3, 2, 4, 6);
+    graphics.fillStyle(0x6b341a, 1);
+    graphics.fillRect(3, 7, 4, 1);
+  });
+
+  makeTexture(scene, 'item-enhancedAmmo', 10, 10, (graphics) => {
+    graphics.fillStyle(0xffe073, 1);
+    graphics.fillRect(3, 2, 4, 6);
+    graphics.fillStyle(0xffffff, 1);
+    graphics.fillRect(4, 2, 2, 2);
+  });
+
+  makeTexture(scene, 'item-incendiaryAmmo', 10, 10, (graphics) => {
+    graphics.fillStyle(0xff6834, 1);
+    graphics.fillRect(3, 2, 4, 6);
+    graphics.fillStyle(0xffd66d, 1);
+    graphics.fillRect(4, 1, 2, 2);
+  });
+
+  makeTexture(scene, 'item-empAmmo', 10, 10, (graphics) => {
+    graphics.fillStyle(0x68d7ff, 1);
+    graphics.fillRect(3, 2, 4, 6);
+    graphics.fillStyle(0xd5fbff, 1);
+    graphics.fillRect(4, 3, 2, 2);
+  });
+
+  makeTexture(scene, 'item-missile', 10, 10, (graphics) => {
+    graphics.fillStyle(0xfff0a6, 1);
+    graphics.fillTriangle(5, 1, 8, 8, 2, 8);
+    graphics.fillStyle(0xff7438, 1);
+    graphics.fillRect(4, 7, 2, 2);
+  });
+
+  makeTexture(scene, 'item-drone', 10, 10, (graphics) => {
+    graphics.fillStyle(0x9de8ff, 1);
+    graphics.fillRect(4, 4, 2, 2);
+    graphics.fillStyle(0x607783, 1);
+    graphics.fillRect(1, 2, 2, 2);
+    graphics.fillRect(7, 2, 2, 2);
+    graphics.fillRect(1, 7, 2, 2);
+    graphics.fillRect(7, 7, 2, 2);
   });
 
   makeTexture(scene, 'direction-arrow', 12, 12, (graphics) => {
