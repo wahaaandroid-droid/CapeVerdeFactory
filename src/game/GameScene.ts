@@ -2016,26 +2016,67 @@ export class GameScene extends Phaser.Scene {
         color: '#b7cad8',
       })
       .setOrigin(0.5);
+    const tableX = 190;
+    const tableY = 146;
+    const tableWidth = 800;
+    const headerHeight = 34;
+    const rowHeight = 68;
+    const visibleRows = 7;
+    const tableHeight = headerHeight + rowHeight * visibleRows;
+    const halfWidth = tableWidth / 2;
+    const buildingColWidth = 112;
+    const tableBg = this.add
+      .rectangle(tableX, tableY, tableWidth, tableHeight, 0x0b1219, 0.9)
+      .setOrigin(0)
+      .setStrokeStyle(2, 0x375162, 0.9)
+      .setInteractive({ useHandCursor: true });
+    const tableGrid = this.add.graphics();
+    tableGrid.lineStyle(1, 0x375162, 0.82);
+    tableGrid.strokeRect(tableX, tableY, tableWidth, tableHeight);
+    tableGrid.lineBetween(tableX, tableY + headerHeight, tableX + tableWidth, tableY + headerHeight);
+    tableGrid.lineBetween(tableX + halfWidth, tableY, tableX + halfWidth, tableY + tableHeight);
+    tableGrid.lineBetween(
+      tableX + buildingColWidth,
+      tableY,
+      tableX + buildingColWidth,
+      tableY + tableHeight,
+    );
+    tableGrid.lineBetween(
+      tableX + halfWidth + buildingColWidth,
+      tableY,
+      tableX + halfWidth + buildingColWidth,
+      tableY + tableHeight,
+    );
+    for (let i = 1; i <= visibleRows; i += 1) {
+      const y = tableY + headerHeight + i * rowHeight;
+      tableGrid.lineBetween(tableX, y, tableX + tableWidth, y);
+    }
+
+    const leftLabelX = tableX + 12;
+    const leftDetailX = tableX + buildingColWidth + 14;
+    const rightLabelX = tableX + halfWidth + 12;
+    const rightDetailX = tableX + halfWidth + buildingColWidth + 14;
+    const detailWidth = halfWidth - buildingColWidth - 28;
     const headers = [
-      this.add.text(112, 150, '建築物', {
+      this.add.text(leftLabelX, tableY + 10, '建築物', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '14px',
         color: '#7ddcff',
         fontStyle: 'bold',
       }),
-      this.add.text(218, 150, 'できること / レシピ', {
+      this.add.text(leftDetailX, tableY + 10, 'できること / レシピ', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '14px',
         color: '#7ddcff',
         fontStyle: 'bold',
       }),
-      this.add.text(535, 150, '建築物', {
+      this.add.text(rightLabelX, tableY + 10, '建築物', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '14px',
         color: '#7ddcff',
         fontStyle: 'bold',
       }),
-      this.add.text(652, 150, 'できること / レシピ', {
+      this.add.text(rightDetailX, tableY + 10, 'できること / レシピ', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '14px',
         color: '#7ddcff',
@@ -2047,10 +2088,9 @@ export class GameScene extends Phaser.Scene {
     RECIPE_ROWS.forEach((row, index) => {
       const rightColumn = index >= 7;
       const rowIndex = rightColumn ? index - 7 : index;
-      const x = rightColumn ? 535 : 112;
-      const detailX = rightColumn ? 652 : 218;
-      const detailWidth = rightColumn ? 250 : 260;
-      const y = 180 + rowIndex * 68;
+      const x = rightColumn ? rightLabelX : leftLabelX;
+      const detailX = rightColumn ? rightDetailX : leftDetailX;
+      const y = tableY + headerHeight + 16 + rowIndex * rowHeight;
       const buildingFontSize = row.building.length >= 6 ? '12px' : '14px';
       const buildingText = this.add.text(x, y, row.building, {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
@@ -2085,8 +2125,19 @@ export class GameScene extends Phaser.Scene {
     shade.on('pointerdown', close);
     board.on('pointerdown', close);
     fallbackPanel.on('pointerdown', close);
+    tableBg.on('pointerdown', close);
 
-    container.add([shade, board, fallbackPanel, title, closeHint, ...headers, ...texts]);
+    container.add([
+      shade,
+      board,
+      fallbackPanel,
+      tableBg,
+      tableGrid,
+      title,
+      closeHint,
+      ...headers,
+      ...texts,
+    ]);
     this.recipeOverlay = container;
     this.registerUiObject(container);
   }
