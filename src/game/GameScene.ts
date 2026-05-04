@@ -1026,12 +1026,12 @@ export class GameScene extends Phaser.Scene {
 
     this.drawPanel(8, 8, 224, 242, '防衛状況');
     const readyButton = this.add
-      .rectangle(118, 220, 178, 34, 0x1f4c3a, 1)
+      .rectangle(118, 232, 178, 34, 0x1f4c3a, 1)
       .setStrokeStyle(2, 0x79f0a4, 1)
       .setDepth(102)
       .setInteractive({ useHandCursor: true });
     const readyText = this.add
-      .text(118, 220, '準備完了', {
+      .text(118, 232, '準備完了', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '17px',
         color: '#ffffff',
