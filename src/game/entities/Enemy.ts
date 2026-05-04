@@ -29,12 +29,13 @@ export class Enemy {
 
   constructor(private readonly scene: GameScene) {
     this.container = scene.add.container(-100, -100).setDepth(45).setVisible(false);
-    this.body = scene.add.sprite(0, 0, 'enemy-small').setOrigin(0.5);
+    this.scene.registerWorldObject(this.container);
+    this.body = scene.add.sprite(0, 0, 'enemy-small').setOrigin(0.5).setScale(1.35);
     this.hpBack = scene.add
-      .rectangle(-12, -17, 24, 3, 0x160707, 0.95)
+      .rectangle(-16, -24, 32, 4, 0x160707, 0.95)
       .setOrigin(0, 0.5);
     this.hpFill = scene.add
-      .rectangle(-12, -17, 24, 3, 0x73f083, 1)
+      .rectangle(-16, -24, 32, 4, 0x73f083, 1)
       .setOrigin(0, 0.5);
     this.container.add([this.body, this.hpBack, this.hpFill]);
   }
@@ -177,7 +178,7 @@ export class Enemy {
 
   private updateHpBar(): void {
     const ratio = this.hp / this.maxHp;
-    this.hpFill.width = 24 * ratio;
+    this.hpFill.width = 32 * ratio;
 
     if (ratio < 0.35) {
       this.hpFill.fillColor = 0xff4d3d;

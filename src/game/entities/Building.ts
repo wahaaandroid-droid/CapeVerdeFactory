@@ -47,22 +47,25 @@ export class Building {
     this.hp = this.maxHp;
 
     this.container = scene.add.container(world.x, world.y).setDepth(20);
+    this.registerWorld(scene, this.container);
     this.sprite = scene.add
       .sprite(0, 0, `building-${type}`)
       .setOrigin(0.5)
-      .setScale(1);
+      .setScale(TILE_SIZE / 30);
     this.directionArrow = scene.add
       .sprite(0, 0, 'direction-arrow')
       .setOrigin(0.5)
+      .setScale(TILE_SIZE / 30)
       .setVisible(type !== 'core' && type !== 'conveyor');
     this.itemSprite = scene.add
       .sprite(0, 0, 'item-ore')
       .setOrigin(0.5)
+      .setScale(TILE_SIZE / 30)
       .setVisible(false);
     this.stockText = scene.add
       .text(0, TILE_SIZE / 2 + 2, '', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '8px',
+        fontSize: '11px',
         color: '#f5f1df',
         backgroundColor: '#111820',
         padding: { x: 1, y: 0 },
@@ -70,11 +73,11 @@ export class Building {
       .setOrigin(0.5, 0)
       .setVisible(false);
     this.hpBack = scene.add
-      .rectangle(-12, -TILE_SIZE / 2 - 4, 24, 3, 0x190a0a, 0.95)
+      .rectangle(-18, -TILE_SIZE / 2 - 6, 36, 4, 0x190a0a, 0.95)
       .setOrigin(0, 0.5)
       .setVisible(false);
     this.hpFill = scene.add
-      .rectangle(-12, -TILE_SIZE / 2 - 4, 24, 3, 0x37e073, 1)
+      .rectangle(-18, -TILE_SIZE / 2 - 6, 36, 4, 0x37e073, 1)
       .setOrigin(0, 0.5)
       .setVisible(false);
 
@@ -163,7 +166,7 @@ export class Building {
         1,
       );
       const angle = Phaser.Math.DegToRad(DIRECTION_ANGLES[this.direction]);
-      const distance = Phaser.Math.Linear(-10, 10, progress);
+      const distance = Phaser.Math.Linear(-TILE_SIZE * 0.32, TILE_SIZE * 0.32, progress);
       this.itemSprite.setPosition(Math.cos(angle) * distance, Math.sin(angle) * distance);
     } else if (this.item) {
       this.itemSprite.setPosition(0, 0);
@@ -222,7 +225,7 @@ export class Building {
     const damaged = this.hp < this.maxHp;
     this.hpBack.setVisible(damaged);
     this.hpFill.setVisible(damaged);
-    this.hpFill.width = 24 * (this.hp / this.maxHp);
+    this.hpFill.width = 36 * (this.hp / this.maxHp);
 
     if (this.hp / this.maxHp < 0.35) {
       this.hpFill.fillColor = 0xff4d3d;
@@ -231,5 +234,15 @@ export class Building {
     } else {
       this.hpFill.fillColor = 0x37e073;
     }
+  }
+
+  private registerWorld(
+    scene: Phaser.Scene,
+    object: Phaser.GameObjects.GameObject,
+  ): void {
+    const maybeScene = scene as Phaser.Scene & {
+      registerWorldObject?: (object: Phaser.GameObjects.GameObject) => void;
+    };
+    maybeScene.registerWorldObject?.(object);
   }
 }

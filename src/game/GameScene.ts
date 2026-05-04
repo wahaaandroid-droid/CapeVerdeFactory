@@ -19,10 +19,16 @@ import {
   GAME_WIDTH,
   GRID_HEIGHT,
   GRID_WIDTH,
+  MAP_HEIGHT_PX,
   MAP_ORIGIN_X,
   MAP_ORIGIN_Y,
+  MAP_WIDTH_PX,
   TILE_SIZE,
   UpgradeId,
+  WORLD_VIEW_HEIGHT,
+  WORLD_VIEW_WIDTH,
+  WORLD_VIEW_X,
+  WORLD_VIEW_Y,
   manhattan,
   rotateDirection,
 } from './types';
@@ -64,6 +70,14 @@ export class GameScene extends Phaser.Scene {
   private readonly bullets: Bullet[] = [];
   private preview!: Phaser.GameObjects.Graphics;
   private buildButtons: BuildButton[] = [];
+  private worldCamera!: Phaser.Cameras.Scene2D.Camera;
+  private uiCamera!: Phaser.Cameras.Scene2D.Camera;
+  private readonly worldObjects = new Set<Phaser.GameObjects.GameObject>();
+  private readonly uiObjects = new Set<Phaser.GameObjects.GameObject>();
+  private readonly keys: Record<string, Phaser.Input.Keyboard.Key> = {};
+  private isPanning = false;
+  private spacePanning = false;
+  private lastPanPoint: Phaser.Math.Vector2 | null = null;
   private gameEnded = false;
   private statusMessage = '準備フェーズでラインを組み、準備完了で戦闘開始';
   private statusUntil = 0;
@@ -74,6 +88,7 @@ export class GameScene extends Phaser.Scene {
     parts: Phaser.GameObjects.Text;
     ore: Phaser.GameObjects.Text;
     ammo: Phaser.GameObjects.Text;
+    controls: Phaser.GameObjects.Text;
     selected: Phaser.GameObjects.Text;
     status: Phaser.GameObjects.Text;
     readyButton: Phaser.GameObjects.Rectangle;
@@ -103,7 +118,10 @@ export class GameScene extends Phaser.Scene {
 
     this.createPools();
     this.createStarterBase();
+    this.captureInitialWorldObjects();
+    this.configureCameras();
     this.createUi();
+    this.captureInitialUiObjects();
     this.createInput();
     this.createHitEvents();
     this.wave.startPreparation();
@@ -120,6 +138,8 @@ export class GameScene extends Phaser.Scene {
     this.enemies.forEach((enemy) => enemy.update(time, delta));
     this.bullets.forEach((bullet) => bullet.update(delta));
     this.wave.update(time);
+    this.updateCameraControls(delta);
+    this.grid.updateCulling(this.worldCamera);
     this.updateUi(time);
     this.updatePreview();
   }
@@ -203,6 +223,7 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(120);
+    this.registerWorldObject(text);
 
     this.tweens.add({
       targets: text,
@@ -218,6 +239,7 @@ export class GameScene extends Phaser.Scene {
     const ring = this.add
       .circle(position.x, position.y, 9 * scale, color, 0.75)
       .setDepth(70);
+    this.registerWorldObject(ring);
 
     this.tweens.add({
       targets: ring,
@@ -232,6 +254,7 @@ export class GameScene extends Phaser.Scene {
       const spark = this.add
         .rectangle(position.x, position.y, 3, 3, i % 2 === 0 ? color : 0xffe0a3, 1)
         .setDepth(75);
+      this.registerWorldObject(spark);
       const angle = (Math.PI * 2 * i) / 6;
       this.tweens.add({
         targets: spark,
@@ -250,8 +273,52 @@ export class GameScene extends Phaser.Scene {
     this.showEndOverlay('CLEAR', '10ウェーブ防衛成功');
   }
 
+  registerWorldObject(object: Phaser.GameObjects.GameObject): void {
+    this.worldObjects.add(object);
+    this.uiObjects.delete(object);
+    this.uiCamera?.ignore(object);
+  }
+
+  registerUiObject(object: Phaser.GameObjects.GameObject): void {
+    this.uiObjects.add(object);
+    this.worldObjects.delete(object);
+    this.worldCamera?.ignore(object);
+  }
+
+  private captureInitialWorldObjects(): void {
+    this.children.list.forEach((object) => this.worldObjects.add(object));
+  }
+
+  private captureInitialUiObjects(): void {
+    this.children.list.forEach((object) => {
+      if (!this.worldObjects.has(object)) {
+        this.uiObjects.add(object);
+      }
+    });
+    this.syncCameraIgnores();
+  }
+
+  private configureCameras(): void {
+    this.worldCamera = this.cameras.main;
+    this.worldCamera
+      .setViewport(WORLD_VIEW_X, WORLD_VIEW_Y, WORLD_VIEW_WIDTH, WORLD_VIEW_HEIGHT)
+      .setBounds(0, 0, MAP_WIDTH_PX, MAP_HEIGHT_PX)
+      .setZoom(0.9)
+      .centerOn(MAP_WIDTH_PX * 0.58, MAP_HEIGHT_PX * 0.5)
+      .setBackgroundColor(0x05080c);
+
+    this.uiCamera = this.cameras.add(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    this.uiCamera.setScroll(0, 0).setZoom(1).setName('ui');
+    this.clampWorldCamera();
+  }
+
+  private syncCameraIgnores(): void {
+    this.worldCamera.ignore([...this.uiObjects]);
+    this.uiCamera.ignore([...this.worldObjects]);
+  }
+
   private createBackdrop(): void {
-    this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x061019, 1).setOrigin(0);
+    this.add.rectangle(0, 0, MAP_WIDTH_PX, MAP_HEIGHT_PX, 0x061019, 1).setOrigin(0);
     this.add
       .rectangle(
         MAP_ORIGIN_X - 6,
@@ -266,19 +333,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createStarterBase(): void {
-    this.core = this.factory.createBuilding('core', { x: 10, y: 10 }, 'up');
-    this.factory.createBuilding('miner', { x: 4, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 5, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 6, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 7, y: 8 }, 'right');
-    const ammoFactory = this.factory.createBuilding('ammoFactory', { x: 8, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 9, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 10, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 11, y: 8 }, 'down');
-    this.factory.createBuilding('conveyor', { x: 11, y: 9 }, 'down');
-    this.factory.createBuilding('conveyor', { x: 11, y: 10 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 12, y: 10 }, 'right');
-    const turret = this.factory.createBuilding('turret', { x: 13, y: 10 }, 'left');
+    const shift = 8;
+    this.core = this.factory.createBuilding('core', { x: 10 + shift, y: 10 }, 'up');
+    this.factory.createBuilding('miner', { x: 4 + shift, y: 8 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 5 + shift, y: 8 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 6 + shift, y: 8 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 7 + shift, y: 8 }, 'right');
+    const ammoFactory = this.factory.createBuilding('ammoFactory', { x: 8 + shift, y: 8 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 9 + shift, y: 8 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 10 + shift, y: 8 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 11 + shift, y: 8 }, 'down');
+    this.factory.createBuilding('conveyor', { x: 11 + shift, y: 9 }, 'down');
+    this.factory.createBuilding('conveyor', { x: 11 + shift, y: 10 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 12 + shift, y: 10 }, 'right');
+    const turret = this.factory.createBuilding('turret', { x: 13 + shift, y: 10 }, 'left');
 
     ammoFactory.oreStored = 2;
     turret.ammoStored = 8;
@@ -303,12 +371,20 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (pointer.rightButtonDown()) {
-        this.mode = 'build';
-        this.setStatus('建設モード');
+        this.startPan(pointer);
+        return;
+      }
+
+      if (this.spacePanning) {
+        this.startPan(pointer);
         return;
       }
 
       if (pointer.leftButtonDown()) {
+        if (!this.isPointerInWorldView(pointer)) {
+          return;
+        }
+
         if (this.mode === 'rotate') {
           this.tryRotateExisting(pointer);
         } else {
@@ -317,7 +393,35 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.isPanning) {
+        this.panToPointer(pointer);
+      }
+    });
+
+    this.input.on('pointerup', () => this.stopPan());
+    this.input.on('wheel', (pointer: Phaser.Input.Pointer, _objects: unknown[], _dx: number, dy: number) => {
+      if (this.isPointerInWorldView(pointer)) {
+        this.zoomAtPointer(pointer, dy);
+      }
+    });
+
+    this.keys.w = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    this.keys.a = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    this.keys.s = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+    this.keys.d = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    this.keys.up = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
+    this.keys.left = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
+    this.keys.down = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN);
+    this.keys.right = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
+    this.keys.space = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        this.spacePanning = true;
+        return;
+      }
+
       if (event.key.toLowerCase() === 'r') {
         this.direction = rotateDirection(this.direction);
         this.setStatus(`向き: ${this.directionLabel(this.direction)}`, 900);
@@ -332,11 +436,17 @@ export class GameScene extends Phaser.Scene {
         this.selectBuild(BUILD_ORDER[number - 1]);
       }
     });
+
+    this.input.keyboard?.on('keyup-SPACE', () => {
+      this.spacePanning = false;
+      this.stopPan();
+    });
   }
 
   private createHitEvents(): void {
     this.events.on('bullet-hit', (x: number, y: number) => {
       const flash = this.add.circle(x, y, 5, 0xffd873, 0.9).setDepth(65);
+      this.registerWorldObject(flash);
       this.tweens.add({
         targets: flash,
         scale: 1.9,
@@ -345,6 +455,106 @@ export class GameScene extends Phaser.Scene {
         onComplete: () => flash.destroy(),
       });
     });
+  }
+
+  private updateCameraControls(delta: number): void {
+    const speed = (420 * delta) / 1000 / this.worldCamera.zoom;
+    let dx = 0;
+    let dy = 0;
+
+    if (this.keys.a?.isDown || this.keys.left?.isDown) {
+      dx -= speed;
+    }
+
+    if (this.keys.d?.isDown || this.keys.right?.isDown) {
+      dx += speed;
+    }
+
+    if (this.keys.w?.isDown || this.keys.up?.isDown) {
+      dy -= speed;
+    }
+
+    if (this.keys.s?.isDown || this.keys.down?.isDown) {
+      dy += speed;
+    }
+
+    if (dx !== 0 || dy !== 0) {
+      this.worldCamera.scrollX += dx;
+      this.worldCamera.scrollY += dy;
+      this.clampWorldCamera();
+    }
+  }
+
+  private startPan(pointer: Phaser.Input.Pointer): void {
+    this.isPanning = true;
+    this.lastPanPoint = new Phaser.Math.Vector2(pointer.x, pointer.y);
+    this.setStatus('ドラッグ移動', 900);
+  }
+
+  private panToPointer(pointer: Phaser.Input.Pointer): void {
+    if (!this.lastPanPoint) {
+      this.startPan(pointer);
+      return;
+    }
+
+    const dx = pointer.x - this.lastPanPoint.x;
+    const dy = pointer.y - this.lastPanPoint.y;
+    this.worldCamera.scrollX -= dx / this.worldCamera.zoom;
+    this.worldCamera.scrollY -= dy / this.worldCamera.zoom;
+    this.lastPanPoint.set(pointer.x, pointer.y);
+    this.clampWorldCamera();
+  }
+
+  private stopPan(): void {
+    this.isPanning = false;
+    this.lastPanPoint = null;
+  }
+
+  private zoomAtPointer(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
+    const before = this.screenToWorld(pointer);
+    const zoomDelta = wheelDeltaY > 0 ? -0.1 : 0.1;
+    this.worldCamera.setZoom(
+      Phaser.Math.Clamp(this.worldCamera.zoom + zoomDelta, 0.5, 2),
+    );
+    const after = this.screenToWorld(pointer);
+    this.worldCamera.scrollX += before.x - after.x;
+    this.worldCamera.scrollY += before.y - after.y;
+    this.clampWorldCamera();
+  }
+
+  private clampWorldCamera(): void {
+    const visibleWidth = WORLD_VIEW_WIDTH / this.worldCamera.zoom;
+    const visibleHeight = WORLD_VIEW_HEIGHT / this.worldCamera.zoom;
+    const maxScrollX = Math.max(0, MAP_WIDTH_PX - visibleWidth);
+    const maxScrollY = Math.max(0, MAP_HEIGHT_PX - visibleHeight);
+
+    this.worldCamera.scrollX = Phaser.Math.Clamp(this.worldCamera.scrollX, 0, maxScrollX);
+    this.worldCamera.scrollY = Phaser.Math.Clamp(this.worldCamera.scrollY, 0, maxScrollY);
+  }
+
+  private isPointerInWorldView(pointer: Phaser.Input.Pointer): boolean {
+    return (
+      pointer.x >= WORLD_VIEW_X &&
+      pointer.x <= WORLD_VIEW_X + WORLD_VIEW_WIDTH &&
+      pointer.y >= WORLD_VIEW_Y &&
+      pointer.y <= WORLD_VIEW_Y + WORLD_VIEW_HEIGHT
+    );
+  }
+
+  private pointerToCell(pointer: Phaser.Input.Pointer): Cell | null {
+    if (!this.isPointerInWorldView(pointer)) {
+      return null;
+    }
+
+    const worldPoint = this.screenToWorld(pointer);
+    return this.grid.worldToCell(worldPoint.x, worldPoint.y);
+  }
+
+  private screenToWorld(pointer: Phaser.Input.Pointer): Phaser.Math.Vector2 {
+    return new Phaser.Math.Vector2(
+      this.worldCamera.scrollX + (pointer.x - WORLD_VIEW_X) / this.worldCamera.zoom,
+      this.worldCamera.scrollY + (pointer.y - WORLD_VIEW_Y) / this.worldCamera.zoom,
+    );
   }
 
   private createUi(): void {
@@ -412,8 +622,9 @@ export class GameScene extends Phaser.Scene {
       parts: this.addText(24, 142, '', 17, '#d6e3eb'),
       ore: this.addText(24, 168, '', 17, '#d6e3eb'),
       ammo: this.addText(118, 168, '', 17, '#ffb174'),
-      selected: this.addText(274, 708, '', 15, '#e6eef4'),
-      status: this.addText(274, 734, this.statusMessage, 15, '#fff0c4'),
+      controls: this.addText(274, 682, 'ホイール: ズーム  ドラッグ: 移動  WASD/矢印: 移動', 15, '#fff3cc', true),
+      selected: this.addText(274, 710, '', 14, '#e6eef4'),
+      status: this.addText(274, 734, this.statusMessage, 14, '#fff0c4'),
       readyButton,
       readyText,
       modeButton,
@@ -527,7 +738,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     graphics.fillStyle(0x38d6ff, 1);
-    graphics.fillRect(originX + 10 * size, originY + 10 * size, size, size);
+    graphics.fillRect(
+      originX + this.core.cell.x * size,
+      originY + this.core.cell.y * size,
+      size,
+      size,
+    );
   }
 
   private updateTurrets(time: number): void {
@@ -589,7 +805,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const cell = this.grid.worldToCell(pointer.x, pointer.y);
+    const cell = this.pointerToCell(pointer);
     if (!cell) {
       return;
     }
@@ -631,7 +847,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const cell = this.grid.worldToCell(pointer.x, pointer.y);
+    const cell = this.pointerToCell(pointer);
     if (!cell) {
       return;
     }
@@ -668,7 +884,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const pointer = this.input.activePointer;
-    const cell = this.grid.worldToCell(pointer.x, pointer.y);
+    const cell = this.pointerToCell(pointer);
     if (!cell) {
       return;
     }
@@ -804,6 +1020,7 @@ export class GameScene extends Phaser.Scene {
 
     restart.on('pointerdown', () => this.scene.restart());
     container.add([shade, panel, titleText, bodyText, restart, restartText]);
+    this.registerUiObject(container);
   }
 
   private drawPanel(x: number, y: number, width: number, height: number, title: string): void {

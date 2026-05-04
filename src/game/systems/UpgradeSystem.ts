@@ -45,6 +45,7 @@ export class UpgradeSystem {
     this.hide();
     const choices = Phaser.Utils.Array.Shuffle([...UPGRADES]).slice(0, 3);
     const container = this.scene.add.container(0, 0).setDepth(200);
+    this.scene.registerUiObject(container);
     const shade = this.scene.add.rectangle(0, 0, 1180, 760, 0x010409, 0.62).setOrigin(0);
     const panel = this.scene.add
       .rectangle(590, 380, 560, 250, 0x101820, 0.96)

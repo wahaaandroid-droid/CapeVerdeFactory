@@ -4,6 +4,7 @@ import {
   Cell,
   GRID_HEIGHT,
   GRID_WIDTH,
+  LEFT_EXPANSION_COLUMNS,
   MAP_ORIGIN_X,
   MAP_ORIGIN_Y,
   TILE_SIZE,
@@ -18,10 +19,10 @@ export class GridSystem {
   private readonly buildings = new Map<string, Building>();
   private tileSprites: Phaser.GameObjects.Sprite[] = [];
   private readonly spawnCells: Cell[] = [
-    { x: 19, y: 3 },
-    { x: 19, y: 7 },
-    { x: 19, y: 12 },
-    { x: 19, y: 17 },
+    { x: GRID_WIDTH - 1, y: 3 },
+    { x: GRID_WIDTH - 1, y: 7 },
+    { x: GRID_WIDTH - 1, y: 12 },
+    { x: GRID_WIDTH - 1, y: 17 },
   ];
 
   constructor() {
@@ -43,7 +44,27 @@ export class GridSystem {
           )
           .setOrigin(0)
           .setDepth(1);
+        this.registerWorld(scene, sprite);
         this.tileSprites.push(sprite);
+      }
+    }
+  }
+
+  updateCulling(camera: Phaser.Cameras.Scene2D.Camera): void {
+    const view = camera.worldView;
+    const pad = TILE_SIZE * 2;
+
+    for (let y = 0; y < GRID_HEIGHT; y += 1) {
+      for (let x = 0; x < GRID_WIDTH; x += 1) {
+        const sprite = this.tileSprites[y * GRID_WIDTH + x];
+        const worldX = MAP_ORIGIN_X + x * TILE_SIZE;
+        const worldY = MAP_ORIGIN_Y + y * TILE_SIZE;
+        sprite.setVisible(
+          worldX + TILE_SIZE >= view.x - pad &&
+            worldX <= view.right + pad &&
+            worldY + TILE_SIZE >= view.y - pad &&
+            worldY <= view.bottom + pad,
+        );
       }
     }
   }
@@ -139,25 +160,38 @@ export class GridSystem {
   }
 
   private generateMap(): void {
+    const old = (x: number, y: number) => `${x + LEFT_EXPANSION_COLUMNS},${y}`;
     const lava = new Set([
-      '2,15',
-      '3,15',
-      '3,16',
-      '4,16',
-      '7,3',
-      '8,3',
-      '8,4',
-      '15,2',
-      '16,2',
-      '16,3',
-      '15,15',
-      '16,15',
-      '16,16',
-      '12,17',
-      '13,17',
+      '1,16',
+      '2,16',
+      '3,17',
+      '5,2',
+      old(2, 15),
+      old(3, 15),
+      old(3, 16),
+      old(4, 16),
+      old(7, 3),
+      old(8, 3),
+      old(8, 4),
+      old(15, 2),
+      old(16, 2),
+      old(16, 3),
+      old(15, 15),
+      old(16, 15),
+      old(16, 16),
+      old(12, 17),
+      old(13, 17),
     ]);
-    const resource = new Set(['4,8', '2,5', '4,14', '6,16', '15,6']);
-    const geothermal = new Set(['11,11', '13,5', '7,12', '5,3']);
+    const resource = new Set([
+      '2,9',
+      '5,4',
+      old(4, 8),
+      old(2, 5),
+      old(4, 14),
+      old(6, 16),
+      old(15, 6),
+    ]);
+    const geothermal = new Set([old(11, 11), old(13, 5), old(7, 12), old(5, 3)]);
 
     for (let y = 0; y < GRID_HEIGHT; y += 1) {
       const row: Tile[] = [];
@@ -165,7 +199,7 @@ export class GridSystem {
         const key = `${x},${y}`;
         let terrain: Terrain = 'ground';
 
-        if (x >= 18) {
+        if (x >= GRID_WIDTH - 2) {
           terrain = 'ocean';
         } else if (lava.has(key)) {
           terrain = 'lava';
@@ -179,5 +213,15 @@ export class GridSystem {
       }
       this.tiles.push(row);
     }
+  }
+
+  private registerWorld(
+    scene: Phaser.Scene,
+    object: Phaser.GameObjects.GameObject,
+  ): void {
+    const maybeScene = scene as Phaser.Scene & {
+      registerWorldObject?: (object: Phaser.GameObjects.GameObject) => void;
+    };
+    maybeScene.registerWorldObject?.(object);
   }
 }

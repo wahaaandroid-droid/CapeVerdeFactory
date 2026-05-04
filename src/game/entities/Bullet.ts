@@ -10,10 +10,14 @@ export class Bullet {
 
   constructor(private readonly scene: Phaser.Scene) {
     this.body = scene.add
-      .rectangle(-100, -100, 7, 3, 0xffcf65, 1)
+      .rectangle(-100, -100, 11, 5, 0xffcf65, 1)
       .setDepth(60)
       .setActive(false)
       .setVisible(false);
+    const maybeScene = scene as Phaser.Scene & {
+      registerWorldObject?: (object: Phaser.GameObjects.GameObject) => void;
+    };
+    maybeScene.registerWorldObject?.(this.body);
   }
 
   fire(
