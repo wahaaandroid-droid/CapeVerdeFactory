@@ -204,11 +204,17 @@ export class FactorySystem {
       return false;
     }
 
-    const start = source.nextOutputIndex % outputs.length;
-    for (let offset = 0; offset < outputs.length; offset += 1) {
-      const index = (start + offset) % outputs.length;
-      if (this.outputToDirection(source, item, outputs[index])) {
-        source.nextOutputIndex = (index + 1) % outputs.length;
+    const planned = source.getItemOutputDirection();
+    const plannedIndex = planned ? outputs.indexOf(planned) : -1;
+    const candidates =
+      planned && plannedIndex >= 0
+        ? [planned]
+        : this.rotatedOutputDirections(outputs, source.nextOutputIndex);
+
+    for (const direction of candidates) {
+      if (this.outputToDirection(source, item, direction)) {
+        const index = outputs.indexOf(direction);
+        source.nextOutputIndex = ((index >= 0 ? index : 0) + 1) % outputs.length;
         return true;
       }
     }
@@ -216,7 +222,10 @@ export class FactorySystem {
     return false;
   }
 
-  private outputDirectionsForItem(source: Building): Direction[] {
+  private outputDirectionsForItem(
+    source: Building,
+    incomingOverride: Direction | null = source.getItemInputDirection(),
+  ): Direction[] {
     const outputs = this.outputDirections(source);
     if (
       source.conveyorVariant !== 'junctionThree' &&
@@ -225,7 +234,7 @@ export class FactorySystem {
       return outputs;
     }
 
-    const incoming = source.getItemInputDirection();
+    const incoming = incomingOverride;
     if (!incoming) {
       return outputs;
     }
@@ -266,11 +275,13 @@ export class FactorySystem {
         return false;
       }
 
+      const incoming = sourceCell ? this.directionBetween(target.cell, sourceCell) : null;
       target.setItem(
         item,
         time,
         this.scene.modifiers.beltIntervalMs,
-        sourceCell ? this.directionBetween(target.cell, sourceCell) : null,
+        incoming,
+        this.pickItemOutputDirection(target, item, incoming),
       );
       target.nextMoveAt = time + this.scene.modifiers.beltIntervalMs;
       return true;
@@ -298,6 +309,66 @@ export class FactorySystem {
     }
 
     return false;
+  }
+
+  private pickItemOutputDirection(
+    source: Building,
+    item: ItemType,
+    incoming: Direction | null,
+  ): Direction | null {
+    const outputs = this.outputDirectionsForItem(source, incoming);
+    if (outputs.length <= 0) {
+      return null;
+    }
+
+    const candidates = this.rotatedOutputDirections(outputs, source.nextOutputIndex);
+    return (
+      candidates.find((direction) => this.canEventuallyOutput(source, item, direction)) ??
+      candidates[0] ??
+      null
+    );
+  }
+
+  private rotatedOutputDirections(
+    outputs: Direction[],
+    startIndex: number,
+  ): Direction[] {
+    if (outputs.length <= 0) {
+      return [];
+    }
+
+    const start = startIndex % outputs.length;
+    return outputs.map((_, offset) => outputs[(start + offset) % outputs.length]);
+  }
+
+  private canEventuallyOutput(
+    source: Building,
+    item: ItemType,
+    direction: Direction,
+  ): boolean {
+    const targetCell = neighbor(source.cell, direction);
+    if (!this.grid.inBounds(targetCell)) {
+      return false;
+    }
+
+    const target = this.grid.getBuilding(targetCell);
+    if (!target?.alive) {
+      return false;
+    }
+
+    if (target.type === 'conveyor') {
+      return this.canConveyorReceive(target, source.cell);
+    }
+
+    if (item === 'ore') {
+      return target.type === 'ammoFactory' || target.type === 'core';
+    }
+
+    return (
+      target.type === 'turret' ||
+      target.type === 'ammoFactory' ||
+      target.type === 'core'
+    );
   }
 
   private canConveyorReceive(target: Building, sourceCell?: Cell): boolean {

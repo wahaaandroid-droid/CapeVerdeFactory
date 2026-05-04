@@ -38,6 +38,7 @@ export class Building {
   private itemEnteredAt = 0;
   private itemTravelMs = 1;
   private itemInputDirection: Direction | null = null;
+  private itemOutputDirection: Direction | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -178,11 +179,13 @@ export class Building {
     enteredAt = 0,
     travelMs = 1,
     inputDirection: Direction | null = null,
+    outputDirection: Direction | null = null,
   ): void {
     this.item = item;
     this.itemEnteredAt = enteredAt;
     this.itemTravelMs = Math.max(1, travelMs);
     this.itemInputDirection = inputDirection;
+    this.itemOutputDirection = outputDirection;
     if (!item) {
       this.itemSprite.setVisible(false);
       return;
@@ -214,6 +217,10 @@ export class Building {
 
   getItemInputDirection(): Direction | null {
     return this.itemInputDirection;
+  }
+
+  getItemOutputDirection(): Direction | null {
+    return this.itemOutputDirection;
   }
 
   flash(color = 0xffffff): void {
@@ -335,7 +342,7 @@ export class Building {
   }
 
   private itemPathPosition(progress: number): Phaser.Math.Vector2 {
-    const output = this.itemOutputDirection();
+    const output = this.currentItemOutputDirection();
     const fallbackInput = this.oppositeDirection(output);
     const incoming =
       this.itemInputDirection && this.itemInputDirection !== output
@@ -359,7 +366,7 @@ export class Building {
     );
   }
 
-  private itemOutputDirection(): Direction {
+  private currentItemOutputDirection(): Direction {
     if (this.type !== 'conveyor') {
       return this.direction;
     }
@@ -377,6 +384,10 @@ export class Building {
         this.conveyorVariant === 'junctionFour') &&
       this.itemInputDirection
     ) {
+      if (this.itemOutputDirection) {
+        return this.itemOutputDirection;
+      }
+
       const outputs = this.conveyorLinkDirections().filter(
         (direction) => direction !== this.itemInputDirection,
       );
