@@ -29,10 +29,8 @@ export type ConveyorVariant =
   | 'straight'
   | 'curveDown'
   | 'curveUp'
-  | 'splitLeftRight'
-  | 'mergeLeftRight'
-  | 'splitThree'
-  | 'mergeThree';
+  | 'junctionThree'
+  | 'junctionFour';
 
 export interface Cell {
   x: number;
@@ -72,10 +70,8 @@ export const CONVEYOR_VARIANTS: ConveyorVariant[] = [
   'straight',
   'curveDown',
   'curveUp',
-  'splitLeftRight',
-  'mergeLeftRight',
-  'splitThree',
-  'mergeThree',
+  'junctionThree',
+  'junctionFour',
 ];
 
 export const DIRECTION_VECTORS: Record<Direction, Cell> = {
@@ -153,25 +149,15 @@ export const CONVEYOR_DEFS: Record<ConveyorVariant, ConveyorVariantDefinition> =
     shortLabel: 'L↑',
     description: '左から入り上へ出る',
   },
-  splitLeftRight: {
-    label: 'T分岐 1→2',
-    shortLabel: 'T 1→2',
-    description: '向き側が1入力。左右2方向へ分岐',
+  junctionThree: {
+    label: 'T字コンベア',
+    shortLabel: 'T',
+    description: '3方向を接続。来た方向以外へ自動分配',
   },
-  mergeLeftRight: {
-    label: 'T合流 2→1',
-    shortLabel: 'T 2→1',
-    description: '左右2入力を向き側へ合流',
-  },
-  splitThree: {
-    label: '十字分岐 1→3',
-    shortLabel: '+ 1→3',
-    description: '向き側が1入力。残り3方向へ分岐',
-  },
-  mergeThree: {
-    label: '十字合流 3→1',
-    shortLabel: '+ 3→1',
-    description: '3方向入力を向き側へ合流',
+  junctionFour: {
+    label: '十字コンベア',
+    shortLabel: '+',
+    description: '4方向を接続。空き方向へ自動分配',
   },
 };
 

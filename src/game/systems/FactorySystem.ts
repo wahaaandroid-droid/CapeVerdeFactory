@@ -199,7 +199,7 @@ export class FactorySystem {
   }
 
   private outputConveyorItem(source: Building, item: ItemType): boolean {
-    const outputs = this.outputDirections(source);
+    const outputs = this.outputDirectionsForItem(source);
     if (outputs.length <= 0) {
       return false;
     }
@@ -214,6 +214,23 @@ export class FactorySystem {
     }
 
     return false;
+  }
+
+  private outputDirectionsForItem(source: Building): Direction[] {
+    const outputs = this.outputDirections(source);
+    if (
+      source.conveyorVariant !== 'junctionThree' &&
+      source.conveyorVariant !== 'junctionFour'
+    ) {
+      return outputs;
+    }
+
+    const incoming = source.getItemInputDirection();
+    if (!incoming) {
+      return outputs;
+    }
+
+    return outputs.filter((direction) => direction !== incoming);
   }
 
   private outputToDirection(
@@ -249,7 +266,12 @@ export class FactorySystem {
         return false;
       }
 
-      target.setItem(item, time, this.scene.modifiers.beltIntervalMs);
+      target.setItem(
+        item,
+        time,
+        this.scene.modifiers.beltIntervalMs,
+        sourceCell ? this.directionBetween(target.cell, sourceCell) : null,
+      );
       target.nextMoveAt = time + this.scene.modifiers.beltIntervalMs;
       return true;
     }
@@ -279,7 +301,11 @@ export class FactorySystem {
   }
 
   private canConveyorReceive(target: Building, sourceCell?: Cell): boolean {
-    if (target.conveyorVariant === 'straight' || !sourceCell) {
+    if (!sourceCell) {
+      return target.conveyorVariant === 'straight';
+    }
+
+    if (target.conveyorVariant === 'straight') {
       return true;
     }
 
@@ -365,29 +391,11 @@ export class FactorySystem {
       return [...DIRECTIONS];
     }
 
-    if (variant === 'splitLeftRight' || variant === 'splitThree') {
-      return [direction];
+    if (variant === 'junctionThree' || variant === 'junctionFour') {
+      return this.connectedDirectionsFor(variant, direction);
     }
 
-    if (variant === 'mergeLeftRight') {
-      return this.perpendicularDirections(direction);
-    }
-
-    if (variant === 'mergeThree') {
-      return DIRECTIONS.filter((candidate) => candidate !== direction);
-    }
-
-    const baseInputs: Record<ConveyorVariant, Direction[]> = {
-      straight: DIRECTIONS,
-      curveDown: ['left'],
-      curveUp: ['left'],
-      splitLeftRight: ['down'],
-      mergeLeftRight: ['left', 'right'],
-      splitThree: ['down'],
-      mergeThree: ['left', 'down', 'right'],
-    };
-
-    return this.rotateDirections(baseInputs[variant], direction);
+    return this.rotateDirections(['left'], direction);
   }
 
   private outputDirectionsFor(
@@ -398,29 +406,14 @@ export class FactorySystem {
       return [direction];
     }
 
-    if (variant === 'splitLeftRight') {
-      return this.perpendicularDirections(direction);
+    if (variant === 'junctionThree' || variant === 'junctionFour') {
+      return this.connectedDirectionsFor(variant, direction);
     }
 
-    if (variant === 'mergeLeftRight' || variant === 'mergeThree') {
-      return [direction];
-    }
-
-    if (variant === 'splitThree') {
-      return DIRECTIONS.filter((candidate) => candidate !== direction);
-    }
-
-    const baseOutputs: Record<ConveyorVariant, Direction[]> = {
-      straight: ['right'],
-      curveDown: ['down'],
-      curveUp: ['up'],
-      splitLeftRight: ['left', 'right'],
-      mergeLeftRight: ['up'],
-      splitThree: ['left', 'up', 'right'],
-      mergeThree: ['up'],
-    };
-
-    return this.rotateDirections(baseOutputs[variant], direction);
+    return this.rotateDirections(
+      variant === 'curveDown' ? ['down'] : ['up'],
+      direction,
+    );
   }
 
   private outputDirectionsForBuilding(building: Building): Direction[] {
@@ -437,6 +430,21 @@ export class FactorySystem {
     }
 
     return [];
+  }
+
+  private connectedDirectionsFor(
+    variant: ConveyorVariant,
+    direction: Direction,
+  ): Direction[] {
+    if (variant === 'junctionFour') {
+      return [...DIRECTIONS];
+    }
+
+    if (variant === 'junctionThree') {
+      return [direction, ...this.perpendicularDirections(direction)];
+    }
+
+    return this.outputDirectionsFor(variant, direction);
   }
 
   private perpendicularDirections(direction: Direction): Direction[] {

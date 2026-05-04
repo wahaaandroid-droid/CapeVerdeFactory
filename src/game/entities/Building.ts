@@ -35,6 +35,7 @@ export class Building {
   private readonly hpFill: Phaser.GameObjects.Rectangle;
   private itemEnteredAt = 0;
   private itemTravelMs = 1;
+  private itemInputDirection: Direction | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -167,10 +168,16 @@ export class Building {
     this.container.destroy(true);
   }
 
-  setItem(item: ItemType | null, enteredAt = 0, travelMs = 1): void {
+  setItem(
+    item: ItemType | null,
+    enteredAt = 0,
+    travelMs = 1,
+    inputDirection: Direction | null = null,
+  ): void {
     this.item = item;
     this.itemEnteredAt = enteredAt;
     this.itemTravelMs = Math.max(1, travelMs);
+    this.itemInputDirection = inputDirection;
     if (!item) {
       this.itemSprite.setVisible(false);
       return;
@@ -199,6 +206,10 @@ export class Building {
 
   getWorldPosition(): Phaser.Math.Vector2 {
     return new Phaser.Math.Vector2(this.container.x, this.container.y);
+  }
+
+  getItemInputDirection(): Direction | null {
+    return this.itemInputDirection;
   }
 
   flash(color = 0xffffff): void {
@@ -242,18 +253,8 @@ export class Building {
       return DIRECTION_ANGLES[this.direction];
     }
 
-    if (
-      this.conveyorVariant === 'splitLeftRight' ||
-      this.conveyorVariant === 'splitThree'
-    ) {
+    if (this.conveyorVariant === 'junctionThree') {
       return DIRECTION_ANGLES[this.direction] - 90;
-    }
-
-    if (
-      this.conveyorVariant === 'mergeLeftRight' ||
-      this.conveyorVariant === 'mergeThree'
-    ) {
-      return DIRECTION_ANGLES[this.direction] + 90;
     }
 
     return DIRECTION_ANGLES[this.direction];
@@ -272,6 +273,14 @@ export class Building {
       return this.rotateBaseDirection('up');
     }
 
+    if (
+      (this.conveyorVariant === 'junctionThree' ||
+        this.conveyorVariant === 'junctionFour') &&
+      this.itemInputDirection
+    ) {
+      return this.oppositeDirection(this.itemInputDirection);
+    }
+
     return this.direction;
   }
 
@@ -280,6 +289,19 @@ export class Building {
     const baseIndex = order.indexOf(base);
     const rotation = order.indexOf(this.direction);
     return order[(baseIndex + rotation) % order.length];
+  }
+
+  private oppositeDirection(direction: Direction): Direction {
+    if (direction === 'up') {
+      return 'down';
+    }
+    if (direction === 'right') {
+      return 'left';
+    }
+    if (direction === 'down') {
+      return 'up';
+    }
+    return 'right';
   }
 
   private updateStockVisual(): void {
