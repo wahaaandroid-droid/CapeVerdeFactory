@@ -77,6 +77,14 @@ export const CONVEYOR_VARIANTS: ConveyorVariant[] = [
   'mergeThree',
 ];
 
+export const PLACEABLE_CONVEYOR_VARIANTS: ConveyorVariant[] = [
+  'straight',
+  'splitLeftRight',
+  'mergeLeftRight',
+  'splitThree',
+  'mergeThree',
+];
+
 export const DIRECTION_VECTORS: Record<Direction, Cell> = {
   up: { x: 0, y: -1 },
   right: { x: 1, y: 0 },

@@ -11,6 +11,8 @@ import {
 } from '../types';
 import { GridSystem } from './GridSystem';
 
+const AUTO_CURVE_VARIANTS: ConveyorVariant[] = ['straight', 'curveDown', 'curveUp'];
+
 export class FactorySystem {
   constructor(
     private readonly scene: GameScene,
@@ -23,27 +25,55 @@ export class FactorySystem {
     direction: Direction,
     conveyorVariant: ConveyorVariant = 'straight',
   ): Building {
+    const conveyorShape =
+      type === 'conveyor' && conveyorVariant === 'straight'
+        ? this.autoCurveForStraight(cell, direction)
+        : { direction, variant: conveyorVariant };
     const building = new Building(
       this.scene,
       type,
       cell,
       this.grid.cellToWorld(cell),
-      direction,
-      conveyorVariant,
+      conveyorShape.direction,
+      conveyorShape.variant,
     );
     this.grid.setBuilding(cell, building);
+    this.refreshAutoConveyorsAround(cell);
     return building;
   }
 
   moveBuilding(building: Building, cell: Cell): void {
+    const oldCell = { ...building.cell };
     this.grid.clearBuilding(building.cell);
     building.moveTo(cell, this.grid.cellToWorld(cell));
     this.grid.setBuilding(cell, building);
+    this.refreshAutoConveyorsAround(oldCell);
+    this.refreshAutoConveyorsAround(cell);
   }
 
   removeBuilding(building: Building): void {
+    const oldCell = { ...building.cell };
     this.grid.clearBuilding(building.cell);
     building.destroy();
+    this.refreshAutoConveyorsAround(oldCell);
+  }
+
+  refreshAutoConveyorsAround(cell: Cell): void {
+    for (const candidate of [cell, ...this.grid.neighbors(cell)]) {
+      const building = this.grid.getBuilding(candidate);
+      if (
+        !building?.alive ||
+        building.type !== 'conveyor' ||
+        !AUTO_CURVE_VARIANTS.includes(building.conveyorVariant)
+      ) {
+        continue;
+      }
+
+      const desiredOutput = this.outputDirections(building)[0] ?? building.direction;
+      const shape = this.autoCurveForStraight(building.cell, desiredOutput);
+      building.setDirection(shape.direction);
+      building.setConveyorVariant(shape.variant);
+    }
   }
 
   update(time: number): void {
@@ -256,8 +286,85 @@ export class FactorySystem {
     return Boolean(incoming && this.inputDirections(target).includes(incoming));
   }
 
+  private autoCurveForStraight(
+    cell: Cell,
+    desiredOutput: Direction,
+  ): { direction: Direction; variant: ConveyorVariant } {
+    const incoming = this.findIncomingStraightConveyor(cell, desiredOutput);
+    if (
+      !incoming ||
+      incoming === desiredOutput ||
+      incoming === this.oppositeDirection(desiredOutput)
+    ) {
+      return { direction: desiredOutput, variant: 'straight' };
+    }
+
+    return this.curveShapeFor(incoming, desiredOutput) ?? {
+      direction: desiredOutput,
+      variant: 'straight',
+    };
+  }
+
+  private findIncomingStraightConveyor(
+    cell: Cell,
+    desiredOutput: Direction,
+  ): Direction | null {
+    const candidates: Direction[] = [
+      this.oppositeDirection(desiredOutput),
+      ...DIRECTIONS.filter((direction) => direction !== this.oppositeDirection(desiredOutput)),
+    ];
+
+    for (const incoming of candidates) {
+      const sourceCell = neighbor(cell, incoming);
+      const source = this.grid.getBuilding(sourceCell);
+      if (
+        !source?.alive ||
+        source.type !== 'conveyor' ||
+        source.conveyorVariant !== 'straight'
+      ) {
+        continue;
+      }
+
+      const sourceToTarget = this.oppositeDirection(incoming);
+      if (this.outputDirections(source).includes(sourceToTarget)) {
+        return incoming;
+      }
+    }
+
+    return null;
+  }
+
+  private curveShapeFor(
+    incoming: Direction,
+    output: Direction,
+  ): { direction: Direction; variant: ConveyorVariant } | null {
+    for (const variant of ['curveDown', 'curveUp'] as ConveyorVariant[]) {
+      for (const direction of DIRECTIONS) {
+        if (
+          this.inputDirectionsFor(variant, direction).includes(incoming) &&
+          this.outputDirectionsFor(variant, direction).includes(output)
+        ) {
+          return { direction, variant };
+        }
+      }
+    }
+
+    return null;
+  }
+
   private inputDirections(building: Building): Direction[] {
-    if (building.conveyorVariant === 'straight') {
+    return this.inputDirectionsFor(building.conveyorVariant, building.direction);
+  }
+
+  private outputDirections(building: Building): Direction[] {
+    return this.outputDirectionsFor(building.conveyorVariant, building.direction);
+  }
+
+  private inputDirectionsFor(
+    variant: ConveyorVariant,
+    direction: Direction,
+  ): Direction[] {
+    if (variant === 'straight') {
       return [...DIRECTIONS];
     }
 
@@ -271,12 +378,15 @@ export class FactorySystem {
       mergeThree: ['left', 'down', 'right'],
     };
 
-    return this.rotateDirections(baseInputs[building.conveyorVariant], building.direction);
+    return this.rotateDirections(baseInputs[variant], direction);
   }
 
-  private outputDirections(building: Building): Direction[] {
-    if (building.conveyorVariant === 'straight') {
-      return [building.direction];
+  private outputDirectionsFor(
+    variant: ConveyorVariant,
+    direction: Direction,
+  ): Direction[] {
+    if (variant === 'straight') {
+      return [direction];
     }
 
     const baseOutputs: Record<ConveyorVariant, Direction[]> = {
@@ -289,7 +399,7 @@ export class FactorySystem {
       mergeThree: ['up'],
     };
 
-    return this.rotateDirections(baseOutputs[building.conveyorVariant], building.direction);
+    return this.rotateDirections(baseOutputs[variant], direction);
   }
 
   private rotateDirections(directions: Direction[], facing: Direction): Direction[] {
@@ -317,6 +427,19 @@ export class FactorySystem {
       return 'left';
     }
     return null;
+  }
+
+  private oppositeDirection(direction: Direction): Direction {
+    if (direction === 'up') {
+      return 'down';
+    }
+    if (direction === 'right') {
+      return 'left';
+    }
+    if (direction === 'down') {
+      return 'up';
+    }
+    return 'right';
   }
 
   private capacity(building: Building, item: ItemType): number {

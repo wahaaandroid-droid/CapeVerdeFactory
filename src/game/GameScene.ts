@@ -14,7 +14,6 @@ import {
   BuildingType,
   Cell,
   CONVEYOR_DEFS,
-  CONVEYOR_VARIANTS,
   ConveyorVariant,
   DIRECTION_ANGLES,
   Direction,
@@ -28,6 +27,7 @@ import {
   MAP_ORIGIN_X,
   MAP_ORIGIN_Y,
   MAP_WIDTH_PX,
+  PLACEABLE_CONVEYOR_VARIANTS,
   TILE_SIZE,
   UpgradeId,
   WORLD_VIEW_HEIGHT,
@@ -849,7 +849,7 @@ export class GameScene extends Phaser.Scene {
       parts: this.addText(24, 142, '', 17, '#d6e3eb'),
       ore: this.addText(24, 172, '', 17, '#d6e3eb'),
       ammo: this.addText(118, 172, '', 17, '#ffb174'),
-      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  C:形状  M:移設  X:解体', 14, '#fff3cc', true),
+      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  C:分岐/合流  M:移設  X:解体', 14, '#fff3cc', true),
       selected: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 56, '', 13, '#e6eef4'),
       status: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 80, this.statusMessage, 14, '#fff0c4'),
       readyButton,
@@ -1000,7 +1000,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.parts -= cost;
-    this.factory.createBuilding(
+    const building = this.factory.createBuilding(
       this.selectedBuild,
       cell,
       this.direction,
@@ -1008,7 +1008,7 @@ export class GameScene extends Phaser.Scene {
     );
     const shape =
       this.selectedBuild === 'conveyor'
-        ? `（${CONVEYOR_DEFS[this.selectedConveyorVariant].label}）`
+        ? `（${CONVEYOR_DEFS[building.conveyorVariant].label}）`
         : '';
     this.setStatus(`${BUILDING_DEFS[this.selectedBuild].label}${shape}を建設`);
   }
@@ -1031,6 +1031,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     building.setDirection(rotateDirection(building.direction));
+    this.factory.refreshAutoConveyorsAround(building.cell);
     this.direction = building.direction;
     this.setStatus(`${BUILDING_DEFS[building.type].label}の向き: ${this.directionLabel(building.direction)}`);
   }
@@ -1125,9 +1126,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private cycleConveyorVariant(): void {
-    const index = CONVEYOR_VARIANTS.indexOf(this.selectedConveyorVariant);
+    const index = PLACEABLE_CONVEYOR_VARIANTS.indexOf(this.selectedConveyorVariant);
     this.selectedConveyorVariant =
-      CONVEYOR_VARIANTS[(index + 1) % CONVEYOR_VARIANTS.length];
+      PLACEABLE_CONVEYOR_VARIANTS[
+        (Math.max(index, 0) + 1) % PLACEABLE_CONVEYOR_VARIANTS.length
+      ];
     this.selectedBuild = 'conveyor';
     this.setMode('build', false);
     this.setStatus(`コンベア形状: ${CONVEYOR_DEFS[this.selectedConveyorVariant].label}`);
@@ -1262,7 +1265,7 @@ export class GameScene extends Phaser.Scene {
     this.ui.selected.setText(
       `モード:${this.modeLabel(this.mode)}  建設:${BUILDING_DEFS[this.selectedBuild].label}  コンベア:${CONVEYOR_DEFS[this.selectedConveyorVariant].shortLabel}  向き:${this.directionLabel(
         this.direction,
-      )}  Q:モード切替`,
+      )}  曲がりは自動`,
     );
     this.ui.readyButton
       .setFillStyle(this.wave.state === 'preparation' ? 0x1f4c3a : 0x24303a, 1)
