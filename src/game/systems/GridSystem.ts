@@ -166,6 +166,15 @@ export class GridSystem {
       '2,16',
       '3,17',
       '5,2',
+      '10,3',
+      '11,3',
+      '12,4',
+      '18,15',
+      '19,15',
+      '20,16',
+      '27,6',
+      '28,6',
+      '28,7',
       old(2, 15),
       old(3, 15),
       old(3, 16),
@@ -185,13 +194,26 @@ export class GridSystem {
     const resource = new Set([
       '2,9',
       '5,4',
+      '11,12',
+      '18,7',
+      '25,15',
+      '31,5',
       old(4, 8),
       old(2, 5),
       old(4, 14),
       old(6, 16),
       old(15, 6),
     ]);
-    const geothermal = new Set([old(11, 11), old(13, 5), old(7, 12), old(5, 3)]);
+    const geothermal = new Set([
+      '8,6',
+      '15,17',
+      '24,3',
+      '30,12',
+      old(11, 11),
+      old(13, 5),
+      old(7, 12),
+      old(5, 3),
+    ]);
 
     for (let y = 0; y < GRID_HEIGHT; y += 1) {
       const row: Tile[] = [];

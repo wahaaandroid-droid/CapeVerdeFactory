@@ -1,7 +1,7 @@
 export const GAME_WIDTH = 1180;
 export const GAME_HEIGHT = 760;
-export const LEFT_EXPANSION_COLUMNS = 8;
-export const GRID_WIDTH = 28;
+export const LEFT_EXPANSION_COLUMNS = 36;
+export const GRID_WIDTH = 56;
 export const GRID_HEIGHT = 20;
 export const TILE_SIZE = 45;
 export const MAP_ORIGIN_X = 0;
@@ -10,7 +10,7 @@ export const MAP_WIDTH_PX = GRID_WIDTH * TILE_SIZE;
 export const MAP_HEIGHT_PX = GRID_HEIGHT * TILE_SIZE;
 export const WORLD_VIEW_X = 232;
 export const WORLD_VIEW_Y = 8;
-export const WORLD_VIEW_WIDTH = 630;
+export const WORLD_VIEW_WIDTH = GAME_WIDTH - WORLD_VIEW_X - 8;
 export const WORLD_VIEW_HEIGHT = 638;
 
 export type Direction = 'up' | 'right' | 'down' | 'left';

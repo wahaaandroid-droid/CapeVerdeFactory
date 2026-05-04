@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import splashUrl from '../../assets/images/splash.jpg';
+import generatedSpritesUrl from '../../assets/sprites/generated-sprites.png';
 import { Bullet } from './entities/Bullet';
 import { Building } from './entities/Building';
 import { Enemy } from './entities/Enemy';
@@ -19,6 +19,7 @@ import {
   GAME_WIDTH,
   GRID_HEIGHT,
   GRID_WIDTH,
+  LEFT_EXPANSION_COLUMNS,
   MAP_HEIGHT_PX,
   MAP_ORIGIN_X,
   MAP_ORIGIN_Y,
@@ -102,11 +103,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image('splash', splashUrl);
+    this.load.spritesheet('generated-sprites', generatedSpritesUrl, {
+      frameWidth: 128,
+      frameHeight: 128,
+    });
   }
 
   create(): void {
     createPixelTextures(this);
+    this.replaceGeneratedTextures();
     this.createBackdrop();
 
     this.grid = new GridSystem();
@@ -304,7 +309,7 @@ export class GameScene extends Phaser.Scene {
       .setViewport(WORLD_VIEW_X, WORLD_VIEW_Y, WORLD_VIEW_WIDTH, WORLD_VIEW_HEIGHT)
       .setBounds(0, 0, MAP_WIDTH_PX, MAP_HEIGHT_PX)
       .setZoom(0.9)
-      .centerOn(MAP_WIDTH_PX * 0.58, MAP_HEIGHT_PX * 0.5)
+      .centerOn(MAP_WIDTH_PX * 0.75, MAP_HEIGHT_PX * 0.5)
       .setBackgroundColor(0x05080c);
 
     this.uiCamera = this.cameras.add(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -315,6 +320,74 @@ export class GameScene extends Phaser.Scene {
   private syncCameraIgnores(): void {
     this.worldCamera.ignore([...this.uiObjects]);
     this.uiCamera.ignore([...this.worldObjects]);
+  }
+
+  private replaceGeneratedTextures(): void {
+    const entries: {
+      key: string;
+      frame: number;
+      width: number;
+      height: number;
+      fill?: number;
+    }[] = [
+      { key: 'building-core', frame: 0, width: 30, height: 30 },
+      { key: 'building-miner', frame: 1, width: 30, height: 30 },
+      { key: 'building-conveyor', frame: 2, width: 30, height: 30 },
+      { key: 'building-ammoFactory', frame: 3, width: 30, height: 30 },
+      { key: 'building-turret', frame: 4, width: 30, height: 30 },
+      { key: 'item-ore', frame: 5, width: 10, height: 10 },
+      { key: 'item-ammo', frame: 6, width: 10, height: 10 },
+      { key: 'enemy-small', frame: 7, width: 24, height: 24 },
+      { key: 'enemy-heavy', frame: 8, width: 28, height: 28 },
+      { key: 'enemy-suicide', frame: 9, width: 24, height: 24 },
+      { key: 'tile-lava', frame: 10, width: TILE_SIZE, height: TILE_SIZE, fill: 0x2b1714 },
+      { key: 'tile-resource', frame: 5, width: TILE_SIZE, height: TILE_SIZE, fill: 0x303436 },
+    ];
+
+    for (const entry of entries) {
+      const frame = this.textures.getFrame('generated-sprites', entry.frame);
+      const source = frame?.source.image as CanvasImageSource | undefined;
+
+      if (!frame || !source) {
+        continue;
+      }
+
+      if (this.textures.exists(entry.key)) {
+        this.textures.remove(entry.key);
+      }
+
+      const texture = this.textures.createCanvas(
+        entry.key,
+        entry.width,
+        entry.height,
+      ) as Phaser.Textures.CanvasTexture | null;
+
+      if (!texture) {
+        continue;
+      }
+
+      const context = texture.context;
+      context.clearRect(0, 0, entry.width, entry.height);
+
+      if (entry.fill !== undefined) {
+        context.fillStyle = `#${entry.fill.toString(16).padStart(6, '0')}`;
+        context.fillRect(0, 0, entry.width, entry.height);
+      }
+
+      context.imageSmoothingEnabled = false;
+      context.drawImage(
+        source,
+        frame.cutX,
+        frame.cutY,
+        frame.cutWidth,
+        frame.cutHeight,
+        0,
+        0,
+        entry.width,
+        entry.height,
+      );
+      texture.refresh();
+    }
   }
 
   private createBackdrop(): void {
@@ -333,7 +406,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createStarterBase(): void {
-    const shift = 8;
+    const shift = LEFT_EXPANSION_COLUMNS;
     this.core = this.factory.createBuilding('core', { x: 10 + shift, y: 10 }, 'up');
     this.factory.createBuilding('miner', { x: 4 + shift, y: 8 }, 'right');
     this.factory.createBuilding('conveyor', { x: 5 + shift, y: 8 }, 'right');
@@ -523,8 +596,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private clampWorldCamera(): void {
-    const visibleWidth = WORLD_VIEW_WIDTH / this.worldCamera.zoom;
-    const visibleHeight = WORLD_VIEW_HEIGHT / this.worldCamera.zoom;
+    const visibleWidth = this.worldCamera.width / this.worldCamera.zoom;
+    const visibleHeight = this.worldCamera.height / this.worldCamera.zoom;
     const maxScrollX = Math.max(0, MAP_WIDTH_PX - visibleWidth);
     const maxScrollY = Math.max(0, MAP_HEIGHT_PX - visibleHeight);
 
@@ -534,10 +607,10 @@ export class GameScene extends Phaser.Scene {
 
   private isPointerInWorldView(pointer: Phaser.Input.Pointer): boolean {
     return (
-      pointer.x >= WORLD_VIEW_X &&
-      pointer.x <= WORLD_VIEW_X + WORLD_VIEW_WIDTH &&
-      pointer.y >= WORLD_VIEW_Y &&
-      pointer.y <= WORLD_VIEW_Y + WORLD_VIEW_HEIGHT
+      pointer.x >= this.worldCamera.x &&
+      pointer.x <= this.worldCamera.x + this.worldCamera.width &&
+      pointer.y >= this.worldCamera.y &&
+      pointer.y <= this.worldCamera.y + this.worldCamera.height
     );
   }
 
@@ -551,13 +624,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private screenToWorld(pointer: Phaser.Input.Pointer): Phaser.Math.Vector2 {
-    return new Phaser.Math.Vector2(
-      this.worldCamera.scrollX + (pointer.x - WORLD_VIEW_X) / this.worldCamera.zoom,
-      this.worldCamera.scrollY + (pointer.y - WORLD_VIEW_Y) / this.worldCamera.zoom,
-    );
+    const point = this.worldCamera.getWorldPoint(pointer.x, pointer.y);
+    return new Phaser.Math.Vector2(point.x, point.y);
   }
 
   private createUi(): void {
+    const lowerPanelY = WORLD_VIEW_Y + WORLD_VIEW_HEIGHT + 8;
+
     this.drawPanel(8, 8, 224, 228, '防衛状況');
     const readyButton = this.add
       .rectangle(118, 207, 178, 34, 0x1f4c3a, 1)
@@ -622,9 +695,9 @@ export class GameScene extends Phaser.Scene {
       parts: this.addText(24, 142, '', 17, '#d6e3eb'),
       ore: this.addText(24, 168, '', 17, '#d6e3eb'),
       ammo: this.addText(118, 168, '', 17, '#ffb174'),
-      controls: this.addText(274, 682, 'ホイール: ズーム  ドラッグ: 移動  WASD/矢印: 移動', 15, '#fff3cc', true),
-      selected: this.addText(274, 710, '', 14, '#e6eef4'),
-      status: this.addText(274, 734, this.statusMessage, 14, '#fff0c4'),
+      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール: ズーム  ドラッグ: 移動  WASD/矢印: 移動', 15, '#fff3cc', true),
+      selected: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 56, '', 14, '#e6eef4'),
+      status: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 80, this.statusMessage, 14, '#fff0c4'),
       readyButton,
       readyText,
       modeButton,
@@ -634,26 +707,7 @@ export class GameScene extends Phaser.Scene {
     this.drawPanel(8, 248, 224, 206, '建設メニュー');
     this.createBuildMenu();
 
-    this.drawPanel(870, 8, 300, 280, '舞台設定');
-    this.add
-      .image(1020, 114, 'splash')
-      .setDisplaySize(258, 145)
-      .setDepth(91);
-    this.addText(
-      890,
-      206,
-      '火山島の地熱採掘基地。\n青いコアを維持し、海から来る\nドローンを10ウェーブ撃退。',
-      15,
-      '#d6e3eb',
-    );
-
-    this.drawPanel(870, 306, 300, 176, '敵ユニット');
-    this.drawEnemyLegend();
-
-    this.drawPanel(870, 500, 300, 188, 'ミニマップ');
-    this.drawMiniMap();
-
-    this.drawPanel(248, 654, 608, 96, '操作ライン');
+    this.drawPanel(WORLD_VIEW_X, lowerPanelY, WORLD_VIEW_WIDTH, 96, '操作ライン');
     this.updateUi(this.time.now);
   }
 
@@ -697,53 +751,6 @@ export class GameScene extends Phaser.Scene {
 
       this.buildButtons.push({ type, box });
     });
-  }
-
-  private drawEnemyLegend(): void {
-    const entries: [EnemyType, string][] = [
-      ['small', '小型'],
-      ['heavy', '重装'],
-      ['suicide', '自爆'],
-    ];
-
-    entries.forEach(([type, label], index) => {
-      const x = 915 + index * 86;
-      this.add.sprite(x, 374, `enemy-${type}`).setDepth(101).setScale(1.4);
-      this.addText(x - 24, 414, label, 15, '#e8edf2');
-    });
-  }
-
-  private drawMiniMap(): void {
-    const originX = 900;
-    const originY = 544;
-    const size = 6;
-    const graphics = this.add.graphics().setDepth(101);
-
-    for (let y = 0; y < GRID_HEIGHT; y += 1) {
-      for (let x = 0; x < GRID_WIDTH; x += 1) {
-        const terrain = this.grid.getTerrain({ x, y });
-        const color =
-          terrain === 'lava'
-            ? 0xff4d22
-            : terrain === 'ocean'
-              ? 0x1688a5
-              : terrain === 'resource'
-                ? 0xb8c5ce
-                : terrain === 'geothermal'
-                  ? 0x34cfff
-                  : 0x475047;
-        graphics.fillStyle(color, 1);
-        graphics.fillRect(originX + x * size, originY + y * size, size - 1, size - 1);
-      }
-    }
-
-    graphics.fillStyle(0x38d6ff, 1);
-    graphics.fillRect(
-      originX + this.core.cell.x * size,
-      originY + this.core.cell.y * size,
-      size,
-      size,
-    );
   }
 
   private updateTurrets(time: number): void {
