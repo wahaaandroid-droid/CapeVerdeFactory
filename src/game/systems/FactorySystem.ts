@@ -249,7 +249,7 @@ export class FactorySystem {
   }
 
   private updateFactory(building: Building, time: number): void {
-    this.tryOutputAllStored(building, time);
+    this.tryOutputFactoryProducts(building, time);
 
     if (time < building.nextWorkAt) {
       return;
@@ -305,6 +305,25 @@ export class FactorySystem {
 
   private tryOutputAllStored(source: Building, time: number): boolean {
     for (const item of source.storedItems()) {
+      if (this.tryOutputStored(source, item, time)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private tryOutputFactoryProducts(source: Building, time: number): boolean {
+    const products = this.factoryProductItems(source.type);
+    if (products.size <= 0) {
+      return false;
+    }
+
+    for (const item of source.storedItems()) {
+      if (!products.has(item)) {
+        continue;
+      }
+
       if (this.tryOutputStored(source, item, time)) {
         return true;
       }
@@ -682,6 +701,11 @@ export class FactorySystem {
     return (Object.entries(recipe.inputs) as [ItemType, number][]).every(
       ([item, amount]) => building.stored(item) >= amount,
     );
+  }
+
+  private factoryProductItems(type: BuildingType): Set<ItemType> {
+    const recipes = FACTORY_RECIPES[type] ?? [];
+    return new Set(recipes.map((recipe) => recipe.output));
   }
 
   private resourceItem(resource: 'iron' | 'copper' | 'oil'): ItemType {
