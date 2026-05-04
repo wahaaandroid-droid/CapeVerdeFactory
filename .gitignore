@@ -1,0 +1,11 @@
+node_modules
+dist
+.vercel
+.env
+.env.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+assets/images/splash.png
+dev-server.*.log
