@@ -44,6 +44,7 @@ export type BuildingType =
   | 'conveyor'
   | 'ammoFactory'
   | 'metalPlateFactory'
+  | 'wireFactory'
   | 'plasticFactory'
   | 'fuelFactory'
   | 'specialAmmoFactory'
@@ -236,7 +237,14 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDefinition> = {
     shortLabel: 'PLATE',
     cost: 120,
     maxHp: 170,
-    description: '鉄板、銅板、ワイヤーを製造',
+    description: '鉄と銅をそれぞれ金属板に加工',
+  },
+  wireFactory: {
+    label: 'ワイヤー工場',
+    shortLabel: 'WIRE',
+    cost: 115,
+    maxHp: 160,
+    description: '銅をワイヤーに加工',
   },
   plasticFactory: {
     label: 'プラスチック工場',
@@ -425,10 +433,13 @@ export function storageCapacity(type: BuildingType, item: ItemType): number {
     return item === 'ironOre' ||
       item === 'copperOre' ||
       item === 'ironPlate' ||
-      item === 'copperPlate' ||
-      item === 'wire'
+      item === 'copperPlate'
       ? 12
       : 0;
+  }
+
+  if (type === 'wireFactory') {
+    return item === 'copperOre' || item === 'wire' ? 12 : 0;
   }
 
   if (type === 'plasticFactory') {

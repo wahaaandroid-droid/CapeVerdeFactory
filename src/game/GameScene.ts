@@ -103,8 +103,15 @@ const BUILD_OPTIONS: BuildOption[] = [
     id: 'metalPlateFactory',
     type: 'metalPlateFactory',
     label: '金属板工場',
-    detail: '鉄板/銅板/線',
+    detail: '鉄板/銅板',
     iconKey: 'building-metalPlateFactory',
+  },
+  {
+    id: 'wireFactory',
+    type: 'wireFactory',
+    label: 'ワイヤー工場',
+    detail: '銅→ワイヤー',
+    iconKey: 'building-wireFactory',
   },
   {
     id: 'plasticFactory',
@@ -209,6 +216,7 @@ const BUILD_GROUPS: BuildGroupDefinition[] = [
     optionIds: [
       'ammoFactory',
       'metalPlateFactory',
+      'wireFactory',
       'plasticFactory',
       'fuelFactory',
       'specialAmmoFactory',
@@ -247,8 +255,13 @@ const RECIPE_ROWS = [
   },
   {
     building: '金属板工場',
-    output: '鉄板 / 銅板 / ワイヤー',
-    recipe: '鉄 1 -> 鉄板 1 / 銅 1 -> 銅板 or 線',
+    output: '鉄板 / 銅板',
+    recipe: '鉄 1 -> 鉄板 1 / 銅 1 -> 銅板 1',
+  },
+  {
+    building: 'ワイヤー工場',
+    output: 'ワイヤー',
+    recipe: '銅 1 -> ワイヤー 1',
   },
   {
     building: 'プラスチック工場',
@@ -2020,8 +2033,8 @@ export class GameScene extends Phaser.Scene {
     const tableY = 146;
     const tableWidth = 800;
     const headerHeight = 34;
-    const rowHeight = 68;
-    const visibleRows = 7;
+    const rowHeight = 60;
+    const visibleRows = Math.ceil(RECIPE_ROWS.length / 2);
     const tableHeight = headerHeight + rowHeight * visibleRows;
     const halfWidth = tableWidth / 2;
     const buildingColWidth = 112;
@@ -2085,12 +2098,13 @@ export class GameScene extends Phaser.Scene {
     ];
 
     const texts: Phaser.GameObjects.Text[] = [];
+    const rightColumnStart = visibleRows;
     RECIPE_ROWS.forEach((row, index) => {
-      const rightColumn = index >= 7;
-      const rowIndex = rightColumn ? index - 7 : index;
+      const rightColumn = index >= rightColumnStart;
+      const rowIndex = rightColumn ? index - rightColumnStart : index;
       const x = rightColumn ? rightLabelX : leftLabelX;
       const detailX = rightColumn ? rightDetailX : leftDetailX;
-      const y = tableY + headerHeight + 16 + rowIndex * rowHeight;
+      const y = tableY + headerHeight + 12 + rowIndex * rowHeight;
       const buildingFontSize = row.building.length >= 6 ? '12px' : '14px';
       const buildingText = this.add.text(x, y, row.building, {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',

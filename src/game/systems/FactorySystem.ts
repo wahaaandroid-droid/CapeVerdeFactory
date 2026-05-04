@@ -19,6 +19,7 @@ const OUTPUT_BUILDINGS: BuildingType[] = [
   'miner',
   'ammoFactory',
   'metalPlateFactory',
+  'wireFactory',
   'plasticFactory',
   'fuelFactory',
   'specialAmmoFactory',
@@ -56,6 +57,8 @@ const FACTORY_RECIPES: Partial<Record<BuildingType, FactoryRecipe[]>> = {
       output: 'copperPlate',
       color: 0xe99a54,
     },
+  ],
+  wireFactory: [
     {
       label: 'ワイヤー',
       inputs: { copperOre: 1 },
