@@ -199,9 +199,8 @@ export class Building {
         0,
         1,
       );
-      const angle = Phaser.Math.DegToRad(DIRECTION_ANGLES[this.itemMotionDirection()]);
-      const distance = Phaser.Math.Linear(-TILE_SIZE * 0.32, TILE_SIZE * 0.32, progress);
-      this.itemSprite.setPosition(Math.cos(angle) * distance, Math.sin(angle) * distance);
+      const position = this.itemPathPosition(progress);
+      this.itemSprite.setPosition(position.x, position.y);
     } else if (this.item) {
       this.itemSprite.setPosition(0, 0);
     }
@@ -335,7 +334,32 @@ export class Building {
     return DIRECTION_ANGLES[this.direction];
   }
 
-  private itemMotionDirection(): Direction {
+  private itemPathPosition(progress: number): Phaser.Math.Vector2 {
+    const output = this.itemOutputDirection();
+    const fallbackInput = this.oppositeDirection(output);
+    const incoming =
+      this.itemInputDirection && this.itemInputDirection !== output
+        ? this.itemInputDirection
+        : fallbackInput;
+    const travel = TILE_SIZE * 0.44;
+    const start = this.directionPoint(incoming, travel);
+    const end = this.directionPoint(output, travel);
+
+    if (incoming === fallbackInput) {
+      return new Phaser.Math.Vector2(
+        Phaser.Math.Linear(start.x, end.x, progress),
+        Phaser.Math.Linear(start.y, end.y, progress),
+      );
+    }
+
+    const inverse = 1 - progress;
+    return new Phaser.Math.Vector2(
+      inverse * inverse * start.x + progress * progress * end.x,
+      inverse * inverse * start.y + progress * progress * end.y,
+    );
+  }
+
+  private itemOutputDirection(): Direction {
     if (this.type !== 'conveyor') {
       return this.direction;
     }
@@ -353,7 +377,10 @@ export class Building {
         this.conveyorVariant === 'junctionFour') &&
       this.itemInputDirection
     ) {
-      return this.oppositeDirection(this.itemInputDirection);
+      const outputs = this.conveyorLinkDirections().filter(
+        (direction) => direction !== this.itemInputDirection,
+      );
+      return outputs[this.nextOutputIndex % Math.max(1, outputs.length)] ?? this.direction;
     }
 
     return this.direction;
