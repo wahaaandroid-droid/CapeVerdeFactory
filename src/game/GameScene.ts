@@ -307,7 +307,6 @@ export class GameScene extends Phaser.Scene {
     this.worldCamera = this.cameras.main;
     this.worldCamera
       .setViewport(WORLD_VIEW_X, WORLD_VIEW_Y, WORLD_VIEW_WIDTH, WORLD_VIEW_HEIGHT)
-      .setBounds(0, 0, MAP_WIDTH_PX, MAP_HEIGHT_PX)
       .setZoom(0.9)
       .centerOn(MAP_WIDTH_PX * 0.75, MAP_HEIGHT_PX * 0.5)
       .setBackgroundColor(0x05080c);
@@ -596,13 +595,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   private clampWorldCamera(): void {
-    const visibleWidth = this.worldCamera.width / this.worldCamera.zoom;
-    const visibleHeight = this.worldCamera.height / this.worldCamera.zoom;
-    const maxScrollX = Math.max(0, MAP_WIDTH_PX - visibleWidth);
-    const maxScrollY = Math.max(0, MAP_HEIGHT_PX - visibleHeight);
+    this.worldCamera.scrollX = this.clampScrollAxis(
+      this.worldCamera.scrollX,
+      this.worldCamera.width,
+      MAP_WIDTH_PX,
+    );
+    this.worldCamera.scrollY = this.clampScrollAxis(
+      this.worldCamera.scrollY,
+      this.worldCamera.height,
+      MAP_HEIGHT_PX,
+    );
+  }
 
-    this.worldCamera.scrollX = Phaser.Math.Clamp(this.worldCamera.scrollX, 0, maxScrollX);
-    this.worldCamera.scrollY = Phaser.Math.Clamp(this.worldCamera.scrollY, 0, maxScrollY);
+  private clampScrollAxis(scroll: number, viewportSize: number, mapSize: number): number {
+    const visibleSize = viewportSize / this.worldCamera.zoom;
+    const halfViewport = viewportSize * 0.5;
+
+    if (visibleSize >= mapSize) {
+      return mapSize * 0.5 - halfViewport;
+    }
+
+    const minScroll = visibleSize * 0.5 - halfViewport;
+    const maxScroll = mapSize - halfViewport - visibleSize * 0.5;
+
+    return Phaser.Math.Clamp(scroll, minScroll, maxScroll);
   }
 
   private isPointerInWorldView(pointer: Phaser.Input.Pointer): boolean {
@@ -624,8 +640,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private screenToWorld(pointer: Phaser.Input.Pointer): Phaser.Math.Vector2 {
-    const point = this.worldCamera.getWorldPoint(pointer.x, pointer.y);
-    return new Phaser.Math.Vector2(point.x, point.y);
+    const visibleLeft = this.worldCamera.scrollX +
+      this.worldCamera.width * 0.5 -
+      (this.worldCamera.width / this.worldCamera.zoom) * 0.5;
+    const visibleTop = this.worldCamera.scrollY +
+      this.worldCamera.height * 0.5 -
+      (this.worldCamera.height / this.worldCamera.zoom) * 0.5;
+
+    return new Phaser.Math.Vector2(
+      visibleLeft + (pointer.x - this.worldCamera.x) / this.worldCamera.zoom,
+      visibleTop + (pointer.y - this.worldCamera.y) / this.worldCamera.zoom,
+    );
   }
 
   private createUi(): void {

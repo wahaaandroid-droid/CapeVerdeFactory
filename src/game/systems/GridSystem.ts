@@ -51,8 +51,13 @@ export class GridSystem {
   }
 
   updateCulling(camera: Phaser.Cameras.Scene2D.Camera): void {
-    const view = camera.worldView;
     const pad = TILE_SIZE * 2;
+    const viewWidth = camera.width / camera.zoom;
+    const viewHeight = camera.height / camera.zoom;
+    const viewLeft = camera.scrollX + camera.width * 0.5 - viewWidth * 0.5;
+    const viewTop = camera.scrollY + camera.height * 0.5 - viewHeight * 0.5;
+    const viewRight = viewLeft + viewWidth;
+    const viewBottom = viewTop + viewHeight;
 
     for (let y = 0; y < GRID_HEIGHT; y += 1) {
       for (let x = 0; x < GRID_WIDTH; x += 1) {
@@ -60,10 +65,10 @@ export class GridSystem {
         const worldX = MAP_ORIGIN_X + x * TILE_SIZE;
         const worldY = MAP_ORIGIN_Y + y * TILE_SIZE;
         sprite.setVisible(
-          worldX + TILE_SIZE >= view.x - pad &&
-            worldX <= view.right + pad &&
-            worldY + TILE_SIZE >= view.y - pad &&
-            worldY <= view.bottom + pad,
+          worldX + TILE_SIZE >= viewLeft - pad &&
+            worldX <= viewRight + pad &&
+            worldY + TILE_SIZE >= viewTop - pad &&
+            worldY <= viewBottom + pad,
         );
       }
     }
