@@ -120,7 +120,7 @@ export class GameScene extends Phaser.Scene {
   parts = 1000000;
   modifiers = {
     turretDamage: 34,
-    turretRange: 125,
+    turretRange: 165,
     beltIntervalMs: 520,
     productionIntervalMs: 1650,
   };
@@ -938,10 +938,13 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const target = this.findNearestEnemy(
-        turret.getWorldPosition(),
-        this.modifiers.turretRange,
+      const turretPosition = turret.getWorldPosition();
+      const rangeCenter = this.turretRangeCenter(
+        turretPosition.x,
+        turretPosition.y,
+        turret.direction,
       );
+      const target = this.findNearestEnemy(rangeCenter, this.modifiers.turretRange);
 
       if (!target) {
         continue;
@@ -1189,13 +1192,30 @@ export class GameScene extends Phaser.Scene {
   private drawTurretRange(
     centerX: number,
     centerY: number,
+    direction: Direction,
     valid = true,
   ): void {
     const color = valid ? 0x7ddcff : 0xff4d3d;
+    const rangeCenter = this.turretRangeCenter(centerX, centerY, direction);
     this.preview.fillStyle(color, 0.08);
-    this.preview.fillCircle(centerX, centerY, this.modifiers.turretRange);
+    this.preview.fillCircle(rangeCenter.x, rangeCenter.y, this.modifiers.turretRange);
+    this.preview.lineStyle(1, color, 0.45);
+    this.preview.lineBetween(centerX, centerY, rangeCenter.x, rangeCenter.y);
     this.preview.lineStyle(2, color, 0.62);
-    this.preview.strokeCircle(centerX, centerY, this.modifiers.turretRange);
+    this.preview.strokeCircle(rangeCenter.x, rangeCenter.y, this.modifiers.turretRange);
+  }
+
+  private turretRangeCenter(
+    centerX: number,
+    centerY: number,
+    direction: Direction,
+  ): Phaser.Math.Vector2 {
+    const angle = Phaser.Math.DegToRad(DIRECTION_ANGLES[direction]);
+    const forwardOffset = TILE_SIZE * 0.75;
+    return new Phaser.Math.Vector2(
+      centerX + Math.cos(angle) * forwardOffset,
+      centerY + Math.sin(angle) * forwardOffset,
+    );
   }
 
   private updatePreview(): void {
@@ -1246,7 +1266,12 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (this.mode === 'rotate' && building?.alive && building.type === 'turret') {
-        this.drawTurretRange(x + TILE_SIZE / 2, y + TILE_SIZE / 2, valid);
+        this.drawTurretRange(
+          x + TILE_SIZE / 2,
+          y + TILE_SIZE / 2,
+          building.direction,
+          valid,
+        );
       }
       return;
     }
@@ -1263,7 +1288,7 @@ export class GameScene extends Phaser.Scene {
     const centerX = x + TILE_SIZE / 2;
     const centerY = y + TILE_SIZE / 2;
     if (this.selectedBuild === 'turret') {
-      this.drawTurretRange(centerX, centerY, valid);
+      this.drawTurretRange(centerX, centerY, this.direction, valid);
       this.preview.lineStyle(2, valid ? 0x7dff9f : 0xff4d3d, 0.95);
       this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
     }
