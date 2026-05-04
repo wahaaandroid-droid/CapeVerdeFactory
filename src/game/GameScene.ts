@@ -297,6 +297,8 @@ export class GameScene extends Phaser.Scene {
     status: Phaser.GameObjects.Text;
     readyButton: Phaser.GameObjects.Rectangle;
     readyText: Phaser.GameObjects.Text;
+    repairButton: Phaser.GameObjects.Rectangle;
+    repairText: Phaser.GameObjects.Text;
     moveButton: Phaser.GameObjects.Rectangle;
     moveText: Phaser.GameObjects.Text;
     demolishButton: Phaser.GameObjects.Rectangle;
@@ -923,6 +925,34 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
+    const repairButton = this.add
+      .rectangle(WORLD_VIEW_X + WORLD_VIEW_WIDTH - 260, lowerPanelY + 35, 148, 28, 0x26303a, 1)
+      .setStrokeStyle(2, 0xffd16a, 1)
+      .setDepth(102)
+      .setInteractive({ useHandCursor: true });
+    const repairText = this.add
+      .text(WORLD_VIEW_X + WORLD_VIEW_WIDTH - 260, lowerPanelY + 35, '一括修理', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '15px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(103);
+    repairButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        this.resumeAudio();
+        this.repairAllBuildings();
+      },
+    );
+
     const moveButton = this.add
       .rectangle(WORLD_VIEW_X + WORLD_VIEW_WIDTH - 102, lowerPanelY + 35, 148, 28, 0x22343c, 1)
       .setStrokeStyle(2, 0x78f2d6, 1)
@@ -991,6 +1021,8 @@ export class GameScene extends Phaser.Scene {
       status: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 80, this.statusMessage, 14, '#fff0c4'),
       readyButton,
       readyText,
+      repairButton,
+      repairText,
       moveButton,
       moveText,
       demolishButton,
@@ -1351,6 +1383,40 @@ export class GameScene extends Phaser.Scene {
     this.setStatus(`${BUILDING_DEFS[building.type].label}を解体`);
   }
 
+  private repairAllBuildings(): void {
+    if (this.wave.state !== 'preparation') {
+      this.setStatus('一括修理は準備フェーズのみ使用可能');
+      return;
+    }
+
+    const repairTargets = this.grid
+      .allBuildings()
+      .filter((building) => this.needsRepair(building));
+    const totalCost = repairTargets.reduce(
+      (total, building) => total + this.repairCostFor(building),
+      0,
+    );
+
+    if (repairTargets.length <= 0) {
+      this.setStatus('修理が必要な施設はありません');
+      return;
+    }
+
+    if (this.parts < totalCost) {
+      this.setStatus(`一括修理に建材${totalCost}が必要`);
+      return;
+    }
+
+    this.parts -= totalCost;
+    for (const building of repairTargets) {
+      building.repairFull();
+      this.factory.refreshAutoConveyorsAround(building.cell);
+    }
+
+    this.cameras.main.shake(70, 0.0012);
+    this.setStatus(`一括修理完了: 建材${totalCost}消費`);
+  }
+
   private selectBuildOption(option: BuildOption): void {
     this.selectedBuild = option.type;
     this.selectedConveyorVariant = option.conveyorVariant ?? 'straight';
@@ -1382,6 +1448,40 @@ export class GameScene extends Phaser.Scene {
     }
 
     return BUILDING_DEFS[type].cost;
+  }
+
+  private repairCostFor(building: Building): number {
+    if (!this.needsRepair(building)) {
+      return 0;
+    }
+
+    const baseCost = this.buildCost(building.type, building.conveyorVariant);
+    if (!building.alive) {
+      return baseCost;
+    }
+
+    if (baseCost <= 0) {
+      return 0;
+    }
+
+    const missingRatio = (building.maxHp - building.hp) / building.maxHp;
+    return Math.max(1, Math.ceil(baseCost * missingRatio));
+  }
+
+  private repairAllCost(): number {
+    return this.grid
+      .allBuildings()
+      .reduce((total, building) => total + this.repairCostFor(building), 0);
+  }
+
+  private repairTargetCount(): number {
+    return this.grid
+      .allBuildings()
+      .filter((building) => this.needsRepair(building)).length;
+  }
+
+  private needsRepair(building: Building): boolean {
+    return !building.alive || building.hp < building.maxHp;
   }
 
   private isWeaponBuilding(type: BuildingType): type is WeaponBuildingType {
@@ -1573,6 +1673,15 @@ export class GameScene extends Phaser.Scene {
       .setFillStyle(this.wave.state === 'preparation' ? 0x1f4c3a : 0x24303a, 1)
       .setStrokeStyle(2, this.wave.state === 'preparation' ? 0x79f0a4 : 0x57606a, 1);
     this.ui.readyText.setAlpha(this.wave.state === 'preparation' ? 1 : 0.45);
+    const repairCost = this.repairAllCost();
+    const repairCount = this.repairTargetCount();
+    const canRepair = this.wave.state === 'preparation' && repairCount > 0 && this.parts >= repairCost;
+    this.ui.repairButton
+      .setFillStyle(canRepair ? 0x3a3421 : 0x26303a, 1)
+      .setStrokeStyle(2, canRepair ? 0xffd16a : 0x6b7480, 1);
+    this.ui.repairText
+      .setText(repairCount > 0 ? `一括修理 ${repairCost}` : '修理不要')
+      .setAlpha(this.wave.state === 'preparation' ? 1 : 0.45);
     this.ui.moveButton
       .setFillStyle(this.mode === 'move' ? 0x235d58 : 0x22343c, 1)
       .setStrokeStyle(2, this.mode === 'move' ? 0xffd16a : 0x78f2d6, 1);
