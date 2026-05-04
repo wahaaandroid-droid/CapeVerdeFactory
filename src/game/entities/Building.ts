@@ -11,6 +11,8 @@ import {
   TILE_SIZE,
 } from '../types';
 
+const ITEM_SPRITE_SCALE = TILE_SIZE / 22.5;
+
 export class Building {
   readonly type: BuildingType;
   cell: Cell;
@@ -70,7 +72,7 @@ export class Building {
     this.itemSprite = scene.add
       .sprite(0, 0, 'item-ore')
       .setOrigin(0.5)
-      .setScale(TILE_SIZE / 30)
+      .setScale(ITEM_SPRITE_SCALE)
       .setVisible(false);
     this.stockText = scene.add
       .text(0, TILE_SIZE / 2 - 14, '', {
