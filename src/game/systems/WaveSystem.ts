@@ -1,40 +1,38 @@
 import type { GameScene } from '../GameScene';
 import { EnemyType } from '../types';
 
-type WaveState = 'countdown' | 'spawning' | 'upgrade' | 'finished' | 'stopped';
+type WaveState = 'preparation' | 'combat' | 'upgrade' | 'finished' | 'stopped';
 
 export class WaveSystem {
   readonly maxWave = 10;
   wave = 0;
-  state: WaveState = 'countdown';
-  countdownSeconds = 0;
-  private nextWaveAt = 0;
+  state: WaveState = 'preparation';
   private nextSpawnAt = 0;
   private spawnQueue: EnemyType[] = [];
 
   constructor(private readonly scene: GameScene) {}
 
-  startCountdown(delayMs = 4500): void {
+  startPreparation(): void {
     if (this.wave >= this.maxWave) {
       this.state = 'finished';
       return;
     }
 
-    this.state = 'countdown';
-    this.nextWaveAt = this.scene.time.now + delayMs;
-    this.countdownSeconds = Math.ceil(delayMs / 1000);
+    this.state = 'preparation';
+    this.spawnQueue = [];
+    this.scene.setStatus('準備フェーズ: ラインを組んで準備完了を押す');
   }
 
-  update(time: number): void {
-    if (this.state === 'countdown') {
-      this.countdownSeconds = Math.max(0, Math.ceil((this.nextWaveAt - time) / 1000));
-      if (time >= this.nextWaveAt) {
-        this.beginWave();
-      }
+  startCombat(): void {
+    if (this.state !== 'preparation' || this.wave >= this.maxWave) {
       return;
     }
 
-    if (this.state !== 'spawning') {
+    this.beginWave();
+  }
+
+  update(time: number): void {
+    if (this.state !== 'combat') {
       return;
     }
 
@@ -58,10 +56,10 @@ export class WaveSystem {
 
   private beginWave(): void {
     this.wave += 1;
-    this.state = 'spawning';
+    this.state = 'combat';
     this.spawnQueue = this.buildWave(this.wave);
     this.nextSpawnAt = this.scene.time.now + 400;
-    this.scene.setStatus(`ウェーブ${this.wave}開始`);
+    this.scene.setStatus(`戦闘フェーズ: ウェーブ${this.wave}開始`);
   }
 
   private finishWave(): void {

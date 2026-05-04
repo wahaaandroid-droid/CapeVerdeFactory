@@ -104,9 +104,9 @@ export class UpgradeSystem {
           event: Phaser.Types.Input.EventData,
         ) => {
           event.stopPropagation();
-        this.scene.applyUpgrade(choice.id);
-        this.hide();
-        this.scene.wave.startCountdown(5200);
+          this.scene.applyUpgrade(choice.id);
+          this.hide();
+          this.scene.wave.startPreparation();
         },
       );
       button.on('pointerover', () => button.setFillStyle(0x204452, 1));

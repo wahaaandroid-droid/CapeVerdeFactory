@@ -14,7 +14,6 @@ export type BuildingType =
   | 'miner'
   | 'conveyor'
   | 'ammoFactory'
-  | 'generator'
   | 'turret';
 export type EnemyType = 'small' | 'heavy' | 'suicide';
 export type UpgradeId = 'turret' | 'belt' | 'production' | 'repair';
@@ -74,7 +73,7 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDefinition> = {
     shortLabel: 'MIN',
     cost: 100,
     maxHp: 120,
-    description: '資源ノードから鉱石を生成',
+    description: '資源ノードから鉄を生成して格納',
   },
   conveyor: {
     label: 'コンベア',
@@ -88,21 +87,14 @@ export const BUILDING_DEFS: Record<BuildingType, BuildingDefinition> = {
     shortLabel: 'AMMO',
     cost: 70,
     maxHp: 170,
-    description: '鉱石を弾薬に変換',
-  },
-  generator: {
-    label: '発電機',
-    shortLabel: 'PWR',
-    cost: 60,
-    maxHp: 150,
-    description: '周囲のタレットに電力供給',
+    description: '格納した鉄を弾薬に変換',
   },
   turret: {
     label: 'タレット',
     shortLabel: 'GUN',
     cost: 85,
     maxHp: 140,
-    description: '弾薬と電力がある時だけ攻撃',
+    description: '自分に弾薬がある時だけ攻撃',
   },
 };
 

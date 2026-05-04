@@ -34,8 +34,9 @@ const BUILD_ORDER: BuildableType[] = [
   'conveyor',
   'ammoFactory',
   'turret',
-  'generator',
 ];
+
+type InteractionMode = 'build' | 'rotate';
 
 interface BuildButton {
   type: BuildableType;
@@ -48,8 +49,7 @@ export class GameScene extends Phaser.Scene {
   wave!: WaveSystem;
   upgrades!: UpgradeSystem;
   core!: Building;
-  metal = 360;
-  reserveAmmo = 0;
+  parts = 360;
   modifiers = {
     turretDamage: 34,
     turretRange: 125,
@@ -59,23 +59,27 @@ export class GameScene extends Phaser.Scene {
 
   private selectedBuild: BuildableType = 'conveyor';
   private direction: Direction = 'right';
+  private mode: InteractionMode = 'build';
   private readonly enemies: Enemy[] = [];
   private readonly bullets: Bullet[] = [];
   private preview!: Phaser.GameObjects.Graphics;
   private buildButtons: BuildButton[] = [];
   private gameEnded = false;
-  private statusMessage = '採掘機からタレットへ弾薬ラインを維持';
+  private statusMessage = '準備フェーズでラインを組み、準備完了で戦闘開始';
   private statusUntil = 0;
   private ui!: {
     wave: Phaser.GameObjects.Text;
-    timer: Phaser.GameObjects.Text;
+    phase: Phaser.GameObjects.Text;
     core: Phaser.GameObjects.Text;
-    metal: Phaser.GameObjects.Text;
+    parts: Phaser.GameObjects.Text;
     ore: Phaser.GameObjects.Text;
     ammo: Phaser.GameObjects.Text;
-    power: Phaser.GameObjects.Text;
     selected: Phaser.GameObjects.Text;
     status: Phaser.GameObjects.Text;
+    readyButton: Phaser.GameObjects.Rectangle;
+    readyText: Phaser.GameObjects.Text;
+    modeButton: Phaser.GameObjects.Rectangle;
+    modeText: Phaser.GameObjects.Text;
   };
 
   constructor() {
@@ -102,7 +106,7 @@ export class GameScene extends Phaser.Scene {
     this.createUi();
     this.createInput();
     this.createHitEvents();
-    this.wave.startCountdown(3600);
+    this.wave.startPreparation();
   }
 
   update(time: number, delta: number): void {
@@ -151,16 +155,8 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  collectItem(item: 'ore' | 'ammo'): void {
-    if (item === 'ore') {
-      this.metal += 15;
-    } else {
-      this.reserveAmmo += 1;
-    }
-  }
-
   onEnemyKilled(reward: number, position: Phaser.Math.Vector2): void {
-    this.metal += reward;
+    this.parts += reward;
     this.floatText(position, `+${reward}`, 0xf3d26a);
     this.explosion(position, 0xff9b38, 0.55);
   }
@@ -282,7 +278,6 @@ export class GameScene extends Phaser.Scene {
     this.factory.createBuilding('conveyor', { x: 11, y: 9 }, 'down');
     this.factory.createBuilding('conveyor', { x: 11, y: 10 }, 'right');
     this.factory.createBuilding('conveyor', { x: 12, y: 10 }, 'right');
-    this.factory.createBuilding('generator', { x: 11, y: 11 }, 'up');
     const turret = this.factory.createBuilding('turret', { x: 13, y: 10 }, 'left');
 
     ammoFactory.oreStored = 2;
@@ -308,12 +303,17 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (pointer.rightButtonDown()) {
-        this.setStatus('建設キャンセル');
+        this.mode = 'build';
+        this.setStatus('建設モード');
         return;
       }
 
       if (pointer.leftButtonDown()) {
-        this.tryPlace(pointer);
+        if (this.mode === 'rotate') {
+          this.tryRotateExisting(pointer);
+        } else {
+          this.tryPlace(pointer);
+        }
       }
     });
 
@@ -321,6 +321,10 @@ export class GameScene extends Phaser.Scene {
       if (event.key.toLowerCase() === 'r') {
         this.direction = rotateDirection(this.direction);
         this.setStatus(`向き: ${this.directionLabel(this.direction)}`, 900);
+      }
+
+      if (event.key.toLowerCase() === 'q') {
+        this.toggleMode();
       }
 
       const number = Number(event.key);
@@ -344,20 +348,79 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createUi(): void {
-    this.drawPanel(8, 8, 224, 214, '防衛状況');
+    this.drawPanel(8, 8, 224, 228, '防衛状況');
+    const readyButton = this.add
+      .rectangle(118, 207, 178, 34, 0x1f4c3a, 1)
+      .setStrokeStyle(2, 0x79f0a4, 1)
+      .setDepth(102)
+      .setInteractive({ useHandCursor: true });
+    const readyText = this.add
+      .text(118, 207, '準備完了', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '17px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(103);
+    readyButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        if (this.wave.state === 'preparation') {
+          this.wave.startCombat();
+        }
+      },
+    );
+
+    const modeButton = this.add
+      .rectangle(118, 430, 178, 34, 0x243340, 1)
+      .setStrokeStyle(2, 0x7ddcff, 1)
+      .setDepth(102)
+      .setInteractive({ useHandCursor: true });
+    const modeText = this.add
+      .text(118, 430, '向き変更モード', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '15px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+      .setDepth(103);
+    modeButton.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        event.stopPropagation();
+        this.toggleMode();
+      },
+    );
+
     this.ui = {
       wave: this.addText(24, 36, '', 21, '#fff3cc', true),
-      timer: this.addText(24, 70, '', 18, '#e6eef4'),
-      core: this.addText(24, 112, '', 18, '#7fdcff'),
-      metal: this.addText(24, 150, '', 17, '#d6e3eb'),
-      ore: this.addText(24, 176, '', 17, '#d6e3eb'),
-      ammo: this.addText(118, 176, '', 17, '#ffb174'),
-      power: this.addText(24, 202, '', 17, '#ffe36d'),
+      phase: this.addText(24, 70, '', 18, '#e6eef4'),
+      core: this.addText(24, 108, '', 18, '#7fdcff'),
+      parts: this.addText(24, 142, '', 17, '#d6e3eb'),
+      ore: this.addText(24, 168, '', 17, '#d6e3eb'),
+      ammo: this.addText(118, 168, '', 17, '#ffb174'),
       selected: this.addText(274, 708, '', 15, '#e6eef4'),
       status: this.addText(274, 734, this.statusMessage, 15, '#fff0c4'),
+      readyButton,
+      readyText,
+      modeButton,
+      modeText,
     };
 
-    this.drawPanel(8, 236, 224, 160, '建設メニュー');
+    this.drawPanel(8, 248, 224, 206, '建設メニュー');
     this.createBuildMenu();
 
     this.drawPanel(870, 8, 300, 280, '舞台設定');
@@ -474,8 +537,7 @@ export class GameScene extends Phaser.Scene {
       if (
         !turret.alive ||
         turret.ammoStored <= 0 ||
-        time < turret.nextFireAt ||
-        !this.factory.isPowered(turret.cell)
+        time < turret.nextFireAt
       ) {
         continue;
       }
@@ -522,6 +584,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private tryPlace(pointer: Phaser.Input.Pointer): void {
+    if (this.wave.state !== 'preparation') {
+      this.setStatus('戦闘中は準備できません');
+      return;
+    }
+
     const cell = this.grid.worldToCell(pointer.x, pointer.y);
     if (!cell) {
       return;
@@ -544,8 +611,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     const cost = BUILDING_DEFS[this.selectedBuild].cost;
-    if (this.metal < cost) {
-      this.setStatus('鉄鉱石が不足');
+    if (this.parts < cost) {
+      this.setStatus('建材が不足');
       return;
     }
 
@@ -553,17 +620,45 @@ export class GameScene extends Phaser.Scene {
       this.factory.removeBuilding(existing);
     }
 
-    this.metal -= cost;
+    this.parts -= cost;
     this.factory.createBuilding(this.selectedBuild, cell, this.direction);
     this.setStatus(`${BUILDING_DEFS[this.selectedBuild].label}を建設`);
   }
 
+  private tryRotateExisting(pointer: Phaser.Input.Pointer): void {
+    if (this.wave.state !== 'preparation') {
+      this.setStatus('戦闘中は向きを変更できません');
+      return;
+    }
+
+    const cell = this.grid.worldToCell(pointer.x, pointer.y);
+    if (!cell) {
+      return;
+    }
+
+    const building = this.grid.getBuilding(cell);
+    if (!building?.alive || building.type === 'core') {
+      this.setStatus('向きを変える施設をクリック');
+      return;
+    }
+
+    building.setDirection(rotateDirection(building.direction));
+    this.direction = building.direction;
+    this.setStatus(`${BUILDING_DEFS[building.type].label}の向き: ${this.directionLabel(building.direction)}`);
+  }
+
   private selectBuild(type: BuildableType): void {
     this.selectedBuild = type;
+    this.mode = 'build';
     this.setStatus(`${BUILDING_DEFS[type].label}を選択`, 900);
     this.buildButtons.forEach(({ type: buttonType, box }) => {
       box.setStrokeStyle(2, buttonType === type ? 0xffd16a : 0x55606a, 1);
     });
+  }
+
+  private toggleMode(): void {
+    this.mode = this.mode === 'build' ? 'rotate' : 'build';
+    this.setStatus(this.mode === 'build' ? '建設モード' : '向き変更モード');
   }
 
   private updatePreview(): void {
@@ -578,56 +673,76 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    const x = MAP_ORIGIN_X + cell.x * TILE_SIZE;
+    const y = MAP_ORIGIN_Y + cell.y * TILE_SIZE;
+
+    if (this.mode === 'rotate') {
+      const building = this.grid.getBuilding(cell);
+      const valid =
+        this.wave.state === 'preparation' &&
+        Boolean(building?.alive) &&
+        building?.type !== 'core';
+      this.preview.lineStyle(2, valid ? 0x7ddcff : 0xff4d3d, 0.95);
+      this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+      return;
+    }
+
     const valid =
+      this.wave.state === 'preparation' &&
       this.grid.isBuildable(cell) &&
       !this.grid.getBuilding(cell)?.alive &&
       (this.selectedBuild !== 'miner' || this.grid.getTerrain(cell) === 'resource') &&
-      this.metal >= BUILDING_DEFS[this.selectedBuild].cost;
-    const x = MAP_ORIGIN_X + cell.x * TILE_SIZE;
-    const y = MAP_ORIGIN_Y + cell.y * TILE_SIZE;
+      this.parts >= BUILDING_DEFS[this.selectedBuild].cost;
     this.preview.lineStyle(2, valid ? 0x7dff9f : 0xff4d3d, 0.95);
     this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
 
-    if (this.selectedBuild === 'conveyor') {
-      this.preview.fillStyle(0xf5c331, 0.75);
-      const centerX = x + TILE_SIZE / 2;
-      const centerY = y + TILE_SIZE / 2;
-      const angle = Phaser.Math.DegToRad(DIRECTION_ANGLES[this.direction]);
-      this.preview.fillTriangle(
-        centerX + Math.cos(angle) * 10,
-        centerY + Math.sin(angle) * 10,
-        centerX + Math.cos(angle + 2.5) * 8,
-        centerY + Math.sin(angle + 2.5) * 8,
-        centerX + Math.cos(angle - 2.5) * 8,
-        centerY + Math.sin(angle - 2.5) * 8,
-      );
-    }
+    this.preview.fillStyle(0xf5c331, 0.75);
+    const centerX = x + TILE_SIZE / 2;
+    const centerY = y + TILE_SIZE / 2;
+    const angle = Phaser.Math.DegToRad(DIRECTION_ANGLES[this.direction]);
+    this.preview.fillTriangle(
+      centerX + Math.cos(angle) * 10,
+      centerY + Math.sin(angle) * 10,
+      centerX + Math.cos(angle + 2.5) * 8,
+      centerY + Math.sin(angle + 2.5) * 8,
+      centerX + Math.cos(angle - 2.5) * 8,
+      centerY + Math.sin(angle - 2.5) * 8,
+    );
   }
 
   private updateUi(time: number): void {
-    this.ui.wave.setText(`ウェーブ ${Math.max(this.wave.wave, 1)}/${this.wave.maxWave}`);
-    const timerText =
-      this.wave.state === 'countdown'
-        ? `次のウェーブまで ${this.wave.countdownSeconds}s`
-        : this.wave.state === 'spawning'
-          ? '敵襲中'
+    this.ui.wave.setText(
+      `ウェーブ ${Math.min(this.wave.wave + 1, this.wave.maxWave)}/${this.wave.maxWave}`,
+    );
+    const phaseText =
+      this.wave.state === 'preparation'
+        ? '準備フェーズ'
+        : this.wave.state === 'combat'
+          ? '戦闘フェーズ'
           : this.wave.state === 'upgrade'
             ? '強化選択中'
             : '完了';
-    this.ui.timer.setText(timerText);
+    this.ui.phase.setText(phaseText);
     this.ui.core.setText(`コアHP ${this.core.hp}/${this.core.maxHp}`);
-    this.ui.metal.setText(`鉄鉱石 ${Math.floor(this.metal)}`);
-    this.ui.ore.setText(`鉱石 ${this.factory.oreInNetwork()}`);
-    this.ui.ammo.setText(`弾薬 ${this.factory.ammoInNetwork() + this.reserveAmmo}`);
-    this.ui.power.setText(`電力 ${this.factory.powerProduced}/${this.factory.powerUsed}`);
+    this.ui.parts.setText(`建材 ${Math.floor(this.parts)}`);
+    this.ui.ore.setText(`鉄 ${this.factory.oreInNetwork()}`);
+    this.ui.ammo.setText(`弾 ${this.factory.ammoInNetwork()}`);
     this.ui.selected.setText(
-      `選択: ${BUILDING_DEFS[this.selectedBuild].label}  向き: ${this.directionLabel(
+      `モード: ${this.mode === 'build' ? '建設' : '向き変更'}  選択: ${BUILDING_DEFS[this.selectedBuild].label}  向き: ${this.directionLabel(
         this.direction,
-      )}  Rで回転`,
+      )}  Rで向き / Qでモード`,
     );
+    this.ui.readyButton
+      .setFillStyle(this.wave.state === 'preparation' ? 0x1f4c3a : 0x24303a, 1)
+      .setStrokeStyle(2, this.wave.state === 'preparation' ? 0x79f0a4 : 0x57606a, 1);
+    this.ui.readyText.setAlpha(this.wave.state === 'preparation' ? 1 : 0.45);
+    this.ui.modeButton
+      .setFillStyle(this.mode === 'rotate' ? 0x31506a : 0x243340, 1)
+      .setStrokeStyle(2, this.mode === 'rotate' ? 0xffd16a : 0x7ddcff, 1);
+    this.ui.modeText.setText(this.mode === 'build' ? '向き変更モード' : '建設モード');
 
     if (this.statusUntil > 0 && time > this.statusUntil) {
-      this.ui.status.setText('ラインを伸ばし、弾薬と電力を切らさない');
+      this.ui.status.setText('鉄を弾薬工場へ、弾をタレットへ実搬送する');
       this.statusUntil = 0;
     }
   }

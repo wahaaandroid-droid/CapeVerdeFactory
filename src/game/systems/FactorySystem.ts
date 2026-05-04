@@ -1,20 +1,15 @@
 import type { GameScene } from '../GameScene';
 import { Building } from '../entities/Building';
 import {
-  BUILDING_DEFS,
   BuildingType,
   Cell,
   Direction,
   ItemType,
-  manhattan,
   neighbor,
 } from '../types';
 import { GridSystem } from './GridSystem';
 
 export class FactorySystem {
-  powerProduced = 0;
-  powerUsed = 0;
-
   constructor(
     private readonly scene: GameScene,
     private readonly grid: GridSystem,
@@ -42,10 +37,9 @@ export class FactorySystem {
   }
 
   update(time: number): void {
-    this.recomputePower();
-
     for (const building of this.grid.allBuildings()) {
       if (!building.alive) {
+        building.updateVisuals(time, this.scene.modifiers.beltIntervalMs);
         continue;
       }
 
@@ -55,21 +49,10 @@ export class FactorySystem {
         this.updateAmmoFactory(building, time);
       } else if (building.type === 'conveyor') {
         this.updateConveyor(building, time);
-      } else if (building.type === 'turret') {
-        building.setPowered(this.isPowered(building.cell));
       }
-    }
-  }
 
-  isPowered(cell: Cell): boolean {
-    return this.grid
-      .allBuildings()
-      .some(
-        (building) =>
-          building.type === 'generator' &&
-          building.alive &&
-          manhattan(building.cell, cell) <= this.generatorRadius(building),
-      );
+      building.updateVisuals(time, this.scene.modifiers.beltIntervalMs);
+    }
   }
 
   getBuildings(type?: BuildingType): Building[] {
@@ -93,6 +76,8 @@ export class FactorySystem {
   }
 
   private updateMiner(building: Building, time: number): void {
+    this.tryOutputStored(building, 'ore', time);
+
     if (time < building.nextWorkAt) {
       return;
     }
@@ -102,19 +87,22 @@ export class FactorySystem {
     building.nextWorkAt =
       time + this.scene.modifiers.productionIntervalMs * speedBonus;
 
-    if (terrain === 'resource') {
-      this.scene.metal += 8;
+    if (terrain === 'resource' && building.oreStored < this.capacity(building, 'ore')) {
+      building.oreStored += 1;
+      building.flash(0xcfe7f3);
       this.scene.floatText(building.getWorldPosition(), '+鉄', 0xcfe7f3);
-      this.outputItem(building, 'ore');
+      this.tryOutputStored(building, 'ore', time);
     }
   }
 
   private updateAmmoFactory(building: Building, time: number): void {
-    if (building.ammoStored > 0 && this.outputItem(building, 'ammo')) {
-      building.ammoStored -= 1;
-    }
+    this.tryOutputStored(building, 'ammo', time);
 
-    if (building.oreStored <= 0 || time < building.nextWorkAt) {
+    if (
+      building.oreStored <= 0 ||
+      building.ammoStored >= this.capacity(building, 'ammo') ||
+      time < building.nextWorkAt
+    ) {
       return;
     }
 
@@ -123,6 +111,7 @@ export class FactorySystem {
     building.ammoStored += 1;
     building.flash(0xff9d3f);
     this.scene.floatText(building.getWorldPosition(), '+弾薬', 0xffa65a);
+    this.tryOutputStored(building, 'ammo', time);
   }
 
   private updateConveyor(building: Building, time: number): void {
@@ -130,11 +119,34 @@ export class FactorySystem {
       return;
     }
 
-    building.nextMoveAt = time + this.scene.modifiers.beltIntervalMs;
-
     if (this.outputItem(building, building.item)) {
       building.setItem(null);
+      building.nextMoveAt = time + this.scene.modifiers.beltIntervalMs;
     }
+  }
+
+  private tryOutputStored(
+    source: Building,
+    item: ItemType,
+    time: number,
+  ): boolean {
+    if (time < source.nextMoveAt) {
+      return false;
+    }
+
+    const stored = item === 'ore' ? source.oreStored : source.ammoStored;
+    if (stored <= 0 || !this.outputItem(source, item)) {
+      return false;
+    }
+
+    if (item === 'ore') {
+      source.oreStored -= 1;
+    } else {
+      source.ammoStored -= 1;
+    }
+
+    source.nextMoveAt = time + this.scene.modifiers.beltIntervalMs;
+    return true;
   }
 
   private outputItem(source: Building, item: ItemType): boolean {
@@ -148,10 +160,10 @@ export class FactorySystem {
       return false;
     }
 
-    return this.tryReceiveItem(target, item);
+    return this.tryReceiveItem(target, item, this.scene.time.now);
   }
 
-  private tryReceiveItem(target: Building, item: ItemType): boolean {
+  private tryReceiveItem(target: Building, item: ItemType, time: number): boolean {
     if (!target.alive) {
       return false;
     }
@@ -161,52 +173,52 @@ export class FactorySystem {
         return false;
       }
 
-      target.setItem(item);
+      target.setItem(item, time, this.scene.modifiers.beltIntervalMs);
+      target.nextMoveAt = time + this.scene.modifiers.beltIntervalMs;
       return true;
     }
 
-    if (target.type === 'ammoFactory' && item === 'ore' && target.oreStored < 10) {
+    if (
+      (target.type === 'ammoFactory' || target.type === 'core') &&
+      item === 'ore' &&
+      target.oreStored < this.capacity(target, 'ore')
+    ) {
       target.oreStored += 1;
       return true;
     }
 
-    if (target.type === 'turret' && item === 'ammo' && target.ammoStored < 40) {
+    if (
+      (target.type === 'turret' ||
+        target.type === 'ammoFactory' ||
+        target.type === 'core') &&
+      item === 'ammo' &&
+      target.ammoStored < this.capacity(target, 'ammo')
+    ) {
       target.ammoStored += 1;
       target.flash(0x7ddcff);
-      return true;
-    }
-
-    if (target.type === 'core') {
-      this.scene.collectItem(item);
       return true;
     }
 
     return false;
   }
 
-  private recomputePower(): void {
-    let produced = 0;
-    let used = 0;
-
-    for (const building of this.grid.allBuildings()) {
-      if (!building.alive) {
-        continue;
-      }
-
-      if (building.type === 'generator') {
-        produced += this.grid.getTerrain(building.cell) === 'geothermal' ? 160 : 100;
-      }
-
-      if (building.type === 'turret') {
-        used += 30;
-      }
+  private capacity(building: Building, item: ItemType): number {
+    if (building.type === 'miner') {
+      return item === 'ore' ? 8 : 0;
     }
 
-    this.powerProduced = produced;
-    this.powerUsed = used;
-  }
+    if (building.type === 'ammoFactory') {
+      return item === 'ore' ? 12 : 8;
+    }
 
-  private generatorRadius(generator: Building): number {
-    return this.grid.getTerrain(generator.cell) === 'geothermal' ? 7 : 5;
+    if (building.type === 'turret') {
+      return item === 'ammo' ? 36 : 0;
+    }
+
+    if (building.type === 'core') {
+      return 60;
+    }
+
+    return building.type === 'conveyor' ? 1 : 0;
   }
 }
