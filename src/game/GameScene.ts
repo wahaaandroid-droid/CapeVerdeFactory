@@ -254,11 +254,11 @@ const BUILD_GROUPS: BuildGroupDefinition[] = [
 const BUILD_OPTION_BY_ID = new Map(BUILD_OPTIONS.map((option) => [option.id, option]));
 const BUILD_MENU_START_Y = 306;
 const BUILD_MENU_HEADER_HEIGHT = 30;
-const BUILD_MENU_CARD_HEIGHT = 52;
-const BUILD_MENU_GAP = 8;
-const BUILD_MENU_AFTER_EXPANDED_GAP = 20;
-const BUILD_MENU_CARD_WIDTH = 88;
-const BUILD_MENU_CARD_COLUMNS = [72, 166];
+const BUILD_MENU_CARD_HEIGHT = 76;
+const BUILD_MENU_GAP = 4;
+const BUILD_MENU_AFTER_EXPANDED_GAP = 14;
+const BUILD_MENU_CARD_WIDTH = 102;
+const BUILD_MENU_CARD_COLUMNS = [72, 178];
 
 const RECIPE_GUIDE_PAGES: RecipeGuidePage[] = [
   {
@@ -1427,7 +1427,7 @@ export class GameScene extends Phaser.Scene {
       demolishText,
     };
 
-    this.drawPanel(8, 260, 224, 492, '建設メニュー');
+    this.drawPanel(8, 260, 224, 500, '建設メニュー');
     this.createBuildMenu();
 
     this.drawPanel(WORLD_VIEW_X, lowerPanelY, WORLD_VIEW_WIDTH, 102, '操作ライン');
@@ -1443,17 +1443,17 @@ export class GameScene extends Phaser.Scene {
       const expanded = this.expandedBuildGroups.has(group.id);
       const headerBox = this.trackBuildMenuObject(
           this.add
-          .rectangle(118, y, 184, BUILD_MENU_HEADER_HEIGHT, 0x202a33, 1)
+          .rectangle(118, y, 198, BUILD_MENU_HEADER_HEIGHT, 0x202a33, 1)
           .setOrigin(0.5)
           .setStrokeStyle(2, expanded ? 0xffd16a : 0x56616b, 1)
           .setDepth(100)
           .setInteractive({ useHandCursor: true }),
       );
       this.trackBuildMenuObject(
-        this.addText(32, y - 11, `${expanded ? '-' : '+'} ${group.label}`, 15, '#fff3cc', true),
+        this.addText(26, y - 11, `${expanded ? '-' : '+'} ${group.label}`, 15, '#fff3cc', true),
       );
       this.trackBuildMenuObject(
-        this.addText(188, y - 9, `${group.optionIds.length}`, 12, '#9fb3c3', true),
+        this.addText(198, y - 9, `${group.optionIds.length}`, 12, '#9fb3c3', true),
       );
 
       headerBox.on(
@@ -1500,11 +1500,11 @@ export class GameScene extends Phaser.Scene {
             .setInteractive({ useHandCursor: true }),
         );
         this.trackBuildMenuObject(
-          this.add.sprite(optionX, optionY - 13, option.iconKey).setDisplaySize(28, 28).setDepth(101),
+          this.add.sprite(optionX, optionY - 18, option.iconKey).setDisplaySize(30, 30).setDepth(101),
         );
         const labelSize = option.label.length >= 7 ? 9 : option.label.length >= 6 ? 10 : 11;
         const labelText = this.add
-          .text(optionX, optionY + 2, option.label, {
+          .text(optionX, optionY + 1, option.label, {
             fontFamily: '"Yu Gothic", Meiryo, sans-serif',
             fontSize: `${labelSize}px`,
             color: '#f4f0df',
@@ -1515,7 +1515,7 @@ export class GameScene extends Phaser.Scene {
           .setOrigin(0.5, 0)
           .setDepth(101);
         const costText = this.add
-          .text(optionX, optionY + 21, `建材 ${cost}`, {
+          .text(optionX, optionY + 22, `建材 ${cost}`, {
             fontFamily: '"Yu Gothic", Meiryo, sans-serif',
             fontSize: '12px',
             color: '#ffd16a',
