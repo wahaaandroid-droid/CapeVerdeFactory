@@ -767,7 +767,6 @@ export class GameScene extends Phaser.Scene {
     ore: Phaser.GameObjects.Text;
     ammo: Phaser.GameObjects.Text;
     objective: Phaser.GameObjects.Text;
-    controls: Phaser.GameObjects.Text;
     selected: Phaser.GameObjects.Text;
     status: Phaser.GameObjects.Text;
     readyButton: Phaser.GameObjects.Rectangle;
@@ -1944,7 +1943,6 @@ export class GameScene extends Phaser.Scene {
       ore: this.addText(24, 174, '', 15, '#d6e3eb'),
       ammo: this.addText(24, 200, '', 13, '#ffb174'),
       objective: objectiveText,
-      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  M:移設  X:解体', 14, '#fff3cc', true),
       selected: selectedText,
       status: statusText,
       readyButton,
