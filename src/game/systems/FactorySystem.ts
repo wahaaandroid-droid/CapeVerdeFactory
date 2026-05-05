@@ -183,6 +183,20 @@ export class FactorySystem {
     }
   }
 
+  setAutoConveyorOutput(building: Building, desiredOutput: Direction): void {
+    if (
+      building.type !== 'conveyor' ||
+      !AUTO_CURVE_VARIANTS.includes(building.conveyorVariant)
+    ) {
+      return;
+    }
+
+    const shape = this.autoCurveForStraight(building.cell, desiredOutput);
+    building.setDirection(shape.direction);
+    building.setConveyorVariant(shape.variant);
+    this.refreshAutoConveyorsAround(building.cell);
+  }
+
   update(time: number): void {
     for (const building of this.grid.allBuildings()) {
       if (!building.alive) {

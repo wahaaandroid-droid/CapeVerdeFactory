@@ -1751,6 +1751,9 @@ export class GameScene extends Phaser.Scene {
       return false;
     }
 
+    const dragOutputDirection = this.conveyorDragOutputDirection(cell, continuous);
+    const placementDirection = dragOutputDirection ?? this.direction;
+
     const existing = this.grid.getBuilding(cell);
     if (existing?.alive && existing.type === 'core') {
       if (!continuous) {
@@ -1763,10 +1766,13 @@ export class GameScene extends Phaser.Scene {
       continuous &&
       existing?.alive &&
       existing.type === this.selectedBuild &&
-      existing.direction === this.direction &&
+      existing.direction === placementDirection &&
       (existing.type !== 'conveyor' ||
         existing.conveyorVariant === this.selectedConveyorVariant)
     ) {
+      if (dragOutputDirection) {
+        this.updateLastPaintedConveyorOutput(dragOutputDirection);
+      }
       this.lastConveyorPaintCell = { ...cell };
       return false;
     }
@@ -1804,11 +1810,15 @@ export class GameScene extends Phaser.Scene {
       this.factory.removeBuilding(existing);
     }
 
+    if (dragOutputDirection) {
+      this.updateLastPaintedConveyorOutput(dragOutputDirection);
+    }
+
     this.parts -= cost;
     const building = this.factory.createBuilding(
       this.selectedBuild,
       cell,
-      this.direction,
+      placementDirection,
       this.selectedBuild === 'conveyor' ? this.selectedConveyorVariant : 'straight',
     );
     const shape =
@@ -1831,6 +1841,48 @@ export class GameScene extends Phaser.Scene {
     }
 
     return true;
+  }
+
+  private conveyorDragOutputDirection(cell: Cell, continuous: boolean): Direction | null {
+    if (
+      !continuous ||
+      this.selectedBuild !== 'conveyor' ||
+      this.selectedConveyorVariant !== 'straight' ||
+      !this.lastConveyorPaintCell
+    ) {
+      return null;
+    }
+
+    return this.directionBetweenCells(this.lastConveyorPaintCell, cell);
+  }
+
+  private updateLastPaintedConveyorOutput(direction: Direction): void {
+    if (!this.lastConveyorPaintCell) {
+      return;
+    }
+
+    const previous = this.grid.getBuilding(this.lastConveyorPaintCell);
+    if (!previous?.alive || previous.type !== 'conveyor') {
+      return;
+    }
+
+    this.factory.setAutoConveyorOutput(previous, direction);
+  }
+
+  private directionBetweenCells(from: Cell, to: Cell): Direction | null {
+    if (to.x === from.x && to.y < from.y) {
+      return 'up';
+    }
+    if (to.x > from.x && to.y === from.y) {
+      return 'right';
+    }
+    if (to.x === from.x && to.y > from.y) {
+      return 'down';
+    }
+    if (to.x < from.x && to.y === from.y) {
+      return 'left';
+    }
+    return null;
   }
 
   private tryRotateHoveredBuilding(): boolean {

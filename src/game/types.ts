@@ -335,7 +335,7 @@ export const CONVEYOR_DEFS: Record<ConveyorVariant, ConveyorVariantDefinition> =
   straight: {
     label: 'コンベア直進',
     shortLabel: 'I',
-    description: '向きの方向へ搬送。曲がりは周囲から自動判定',
+    description: 'ドラッグ時は進行方向へ自動接続。曲がりも自動判定',
     cost: 10,
   },
   curveDown: {
