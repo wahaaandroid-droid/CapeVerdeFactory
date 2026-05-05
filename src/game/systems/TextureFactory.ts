@@ -49,15 +49,6 @@ export function createPixelTextures(scene: Phaser.Scene): void {
     graphics.fillRect(5, 19, 4, 2);
   });
 
-  makeTexture(scene, 'tile-geothermal', TILE_SIZE, TILE_SIZE, (graphics) => {
-    tileFrame(graphics, 0x27353b, 0x4b717b);
-    graphics.fillStyle(0x37b5ff, 1);
-    graphics.fillRect(8, 8, 14, 2);
-    graphics.fillRect(13, 4, 4, 18);
-    graphics.fillStyle(0xa6eaff, 1);
-    graphics.fillRect(14, 6, 2, 14);
-  });
-
   makeTexture(scene, 'tile-resource', TILE_SIZE, TILE_SIZE, (graphics) => {
     tileFrame(graphics, 0x303436, 0x5f6667);
     graphics.fillStyle(0x9aa9b1, 1);

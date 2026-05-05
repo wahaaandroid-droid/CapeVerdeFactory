@@ -223,17 +223,6 @@ export class GridSystem {
       old(10, 8),
       old(13, 14),
     ]);
-    const geothermal = new Set([
-      '8,6',
-      '15,17',
-      '24,3',
-      '30,12',
-      old(11, 11),
-      old(13, 5),
-      old(7, 12),
-      old(5, 3),
-    ]);
-
     for (let y = 0; y < GRID_HEIGHT; y += 1) {
       const row: Tile[] = [];
       for (let x = 0; x < GRID_WIDTH; x += 1) {
@@ -250,8 +239,6 @@ export class GridSystem {
           terrain = 'resourceCopper';
         } else if (oil.has(key)) {
           terrain = 'resourceOil';
-        } else if (geothermal.has(key)) {
-          terrain = 'geothermal';
         }
 
         const resource =

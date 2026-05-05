@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import areaExplosionsUrl from '../../assets/images/area-explosions-generated.png';
 import recipeBoardUrl from '../../assets/images/recipe-board-generated.png';
 import generatedConveyorsUrl from '../../assets/sprites/generated-conveyors.png';
 import generatedSpritesUrl from '../../assets/sprites/generated-sprites.png';
@@ -240,7 +241,11 @@ const BUILD_GROUPS: BuildGroupDefinition[] = [
 
 const BUILD_OPTION_BY_ID = new Map(BUILD_OPTIONS.map((option) => [option.id, option]));
 const BUILD_MENU_START_Y = 306;
-const BUILD_MENU_ROW_HEIGHT = 31;
+const BUILD_MENU_HEADER_HEIGHT = 30;
+const BUILD_MENU_CARD_HEIGHT = 52;
+const BUILD_MENU_GAP = 8;
+const BUILD_MENU_CARD_WIDTH = 88;
+const BUILD_MENU_CARD_COLUMNS = [72, 166];
 
 const RECIPE_ROWS = [
   {
@@ -327,6 +332,7 @@ type WeaponBuildingType =
   | 'empTurret'
   | 'missileTurret';
 type WeaponSoundType = WeaponBuildingType | 'droneTower' | 'combatDrone';
+type AreaExplosionType = 'incendiary' | 'emp' | 'missile';
 
 interface WeaponConfig {
   ammo: ItemType;
@@ -336,6 +342,7 @@ interface WeaponConfig {
   color: number;
   radius?: number;
   stunMs?: number;
+  areaEffect?: AreaExplosionType;
 }
 
 const WEAPON_CONFIGS: Record<WeaponBuildingType, WeaponConfig> = {
@@ -360,6 +367,7 @@ const WEAPON_CONFIGS: Record<WeaponBuildingType, WeaponConfig> = {
     fireIntervalMultiplier: 1.7,
     color: 0xff6834,
     radius: 72,
+    areaEffect: 'incendiary',
   },
   empTurret: {
     ammo: 'empAmmo',
@@ -369,6 +377,7 @@ const WEAPON_CONFIGS: Record<WeaponBuildingType, WeaponConfig> = {
     color: 0x68d7ff,
     radius: 78,
     stunMs: 3000,
+    areaEffect: 'emp',
   },
   missileTurret: {
     ammo: 'missile',
@@ -377,6 +386,7 @@ const WEAPON_CONFIGS: Record<WeaponBuildingType, WeaponConfig> = {
     fireIntervalMultiplier: 10,
     color: 0xfff0a6,
     radius: 96,
+    areaEffect: 'missile',
   },
 };
 
@@ -461,12 +471,14 @@ export class GameScene extends Phaser.Scene {
       frameWidth: 128,
       frameHeight: 128,
     });
+    this.load.image('area-explosions-generated', areaExplosionsUrl);
     this.load.image('recipe-board-generated', recipeBoardUrl);
   }
 
   create(): void {
     createPixelTextures(this);
     this.replaceGeneratedTextures();
+    this.createAreaExplosionTextures();
     this.createBackdrop();
 
     this.grid = new GridSystem();
@@ -629,6 +641,84 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private showAreaImpact(
+    position: Phaser.Math.Vector2,
+    radius: number,
+    color: number,
+    effect: AreaExplosionType | undefined,
+  ): void {
+    const gridFlash = this.add.graphics().setDepth(68);
+    this.registerWorldObject(gridFlash);
+    gridFlash.fillStyle(color, 0.1);
+    gridFlash.lineStyle(2, color, 0.62);
+
+    const minX = Math.max(0, Math.floor((position.x - radius) / TILE_SIZE));
+    const maxX = Math.min(GRID_WIDTH - 1, Math.floor((position.x + radius) / TILE_SIZE));
+    const minY = Math.max(0, Math.floor((position.y - radius) / TILE_SIZE));
+    const maxY = Math.min(GRID_HEIGHT - 1, Math.floor((position.y + radius) / TILE_SIZE));
+
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        const cellCenterX = MAP_ORIGIN_X + x * TILE_SIZE + TILE_SIZE / 2;
+        const cellCenterY = MAP_ORIGIN_Y + y * TILE_SIZE + TILE_SIZE / 2;
+        const distance = Phaser.Math.Distance.Between(
+          position.x,
+          position.y,
+          cellCenterX,
+          cellCenterY,
+        );
+
+        if (distance > radius + TILE_SIZE * 0.2) {
+          continue;
+        }
+
+        gridFlash.fillRect(
+          MAP_ORIGIN_X + x * TILE_SIZE + 2,
+          MAP_ORIGIN_Y + y * TILE_SIZE + 2,
+          TILE_SIZE - 4,
+          TILE_SIZE - 4,
+        );
+        gridFlash.strokeRect(
+          MAP_ORIGIN_X + x * TILE_SIZE + 3,
+          MAP_ORIGIN_Y + y * TILE_SIZE + 3,
+          TILE_SIZE - 6,
+          TILE_SIZE - 6,
+        );
+      }
+    }
+
+    if (effect && this.textures.exists(`area-explosion-${effect}`)) {
+      const size = radius * (effect === 'missile' ? 2.7 : 2.35);
+      const sprite = this.add
+        .sprite(position.x, position.y, `area-explosion-${effect}`)
+        .setDisplaySize(size, size)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(effect === 'emp' ? 0.9 : 0.86)
+        .setDepth(78);
+      this.registerWorldObject(sprite);
+
+      this.tweens.add({
+        targets: sprite,
+        scaleX: sprite.scaleX * 1.18,
+        scaleY: sprite.scaleY * 1.18,
+        alpha: 0,
+        duration: effect === 'missile' ? 520 : 420,
+        ease: 'Quad.easeOut',
+        onComplete: () => sprite.destroy(),
+      });
+    } else {
+      this.explosion(position, color, Math.max(0.75, radius / 80));
+    }
+
+    this.tweens.add({
+      targets: gridFlash,
+      alpha: 0,
+      duration: 520,
+      ease: 'Quad.easeOut',
+      onComplete: () => gridFlash.destroy(),
+    });
+  }
+
   winGame(): void {
     this.gameEnded = true;
     this.wave.stop();
@@ -749,6 +839,49 @@ export class GameScene extends Phaser.Scene {
       );
       texture.refresh();
     }
+  }
+
+  private createAreaExplosionTextures(): void {
+    const source = this.textures
+      .get('area-explosions-generated')
+      .getSourceImage() as HTMLImageElement | HTMLCanvasElement | undefined;
+
+    if (!source?.width || !source.height) {
+      return;
+    }
+
+    const frameKeys: AreaExplosionType[] = ['incendiary', 'emp', 'missile'];
+    const sliceWidth = source.width / frameKeys.length;
+
+    frameKeys.forEach((effect, index) => {
+      const key = `area-explosion-${effect}`;
+      if (this.textures.exists(key)) {
+        this.textures.remove(key);
+      }
+
+      const texture = this.textures.createCanvas(key, 128, 128) as
+        | Phaser.Textures.CanvasTexture
+        | null;
+      if (!texture) {
+        return;
+      }
+
+      const context = texture.context;
+      context.clearRect(0, 0, 128, 128);
+      context.imageSmoothingEnabled = false;
+      context.drawImage(
+        source,
+        index * sliceWidth,
+        0,
+        sliceWidth,
+        source.height,
+        0,
+        0,
+        128,
+        128,
+      );
+      texture.refresh();
+    });
   }
 
   private createBackdrop(): void {
@@ -1181,9 +1314,9 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
-    const selectedText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 54, '', 12, '#e6eef4');
+    const selectedText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 50, '', 14, '#e6eef4');
     selectedText.setWordWrapWidth(WORLD_VIEW_WIDTH - 340);
-    const statusText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 82, this.statusMessage, 13, '#fff0c4');
+    const statusText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 80, this.statusMessage, 13, '#fff0c4');
     statusText.setWordWrapWidth(WORLD_VIEW_WIDTH - 340);
 
     this.ui = {
@@ -1217,24 +1350,24 @@ export class GameScene extends Phaser.Scene {
 
   private createBuildMenu(): void {
     this.clearBuildMenu();
-    let row = 0;
+    let yCursor = BUILD_MENU_START_Y;
 
     for (const group of BUILD_GROUPS) {
-      const y = BUILD_MENU_START_Y + row * BUILD_MENU_ROW_HEIGHT;
+      const y = yCursor;
       const expanded = this.expandedBuildGroups.has(group.id);
       const headerBox = this.trackBuildMenuObject(
           this.add
-          .rectangle(118, y, 178, 25, 0x202a33, 1)
+          .rectangle(118, y, 184, BUILD_MENU_HEADER_HEIGHT, 0x202a33, 1)
           .setOrigin(0.5)
           .setStrokeStyle(2, expanded ? 0xffd16a : 0x56616b, 1)
           .setDepth(100)
           .setInteractive({ useHandCursor: true }),
       );
       this.trackBuildMenuObject(
-        this.addText(34, y - 10, `${expanded ? '-' : '+'} ${group.label}`, 12, '#fff3cc', true),
+        this.addText(32, y - 11, `${expanded ? '-' : '+'} ${group.label}`, 15, '#fff3cc', true),
       );
       this.trackBuildMenuObject(
-        this.addText(180, y - 8, `${group.optionIds.length}`, 10, '#9fb3c3', true),
+        this.addText(188, y - 9, `${group.optionIds.length}`, 12, '#9fb3c3', true),
       );
 
       headerBox.on(
@@ -1252,36 +1385,60 @@ export class GameScene extends Phaser.Scene {
       );
       headerBox.on('pointerover', () => headerBox.setFillStyle(0x2a3640, 1));
       headerBox.on('pointerout', () => headerBox.setFillStyle(0x202a33, 1));
-      row += 1;
+      yCursor += BUILD_MENU_HEADER_HEIGHT + BUILD_MENU_GAP;
 
       if (!expanded) {
         continue;
       }
 
-      for (const optionId of group.optionIds) {
+      group.optionIds.forEach((optionId, index) => {
         const option = BUILD_OPTION_BY_ID.get(optionId);
         if (!option) {
-          continue;
+          return;
         }
 
-        const optionY = BUILD_MENU_START_Y + row * BUILD_MENU_ROW_HEIGHT;
+        const column = index % BUILD_MENU_CARD_COLUMNS.length;
+        const optionY =
+          yCursor +
+          Math.floor(index / BUILD_MENU_CARD_COLUMNS.length) *
+            (BUILD_MENU_CARD_HEIGHT + BUILD_MENU_GAP) +
+          BUILD_MENU_CARD_HEIGHT / 2;
+        const optionX = BUILD_MENU_CARD_COLUMNS[column];
+        const cost = this.buildOptionCost(option);
         const box = this.trackBuildMenuObject(
           this.add
-            .rectangle(118, optionY, 178, 27, 0x151a20, 1)
+            .rectangle(optionX, optionY, BUILD_MENU_CARD_WIDTH, BUILD_MENU_CARD_HEIGHT, 0x151a20, 1)
             .setOrigin(0.5)
             .setStrokeStyle(2, this.isBuildOptionSelected(option) ? 0xffd16a : 0x55606a, 1)
             .setDepth(100)
             .setInteractive({ useHandCursor: true }),
         );
         this.trackBuildMenuObject(
-          this.add.sprite(42, optionY, option.iconKey).setDisplaySize(21, 21).setDepth(101),
+          this.add.sprite(optionX, optionY - 13, option.iconKey).setDisplaySize(28, 28).setDepth(101),
         );
-        this.trackBuildMenuObject(
-          this.addText(56, optionY - 12, option.label, 10, '#e8edf2', true),
-        );
-        this.trackBuildMenuObject(
-          this.addText(56, optionY + 1, `${option.detail} / 建材${this.buildOptionCost(option)}`, 8, '#cfd8df'),
-        );
+        const labelSize = option.label.length >= 7 ? 9 : option.label.length >= 6 ? 10 : 11;
+        const labelText = this.add
+          .text(optionX, optionY + 2, option.label, {
+            fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+            fontSize: `${labelSize}px`,
+            color: '#f4f0df',
+            fontStyle: 'bold',
+            align: 'center',
+            wordWrap: { width: BUILD_MENU_CARD_WIDTH - 8 },
+          })
+          .setOrigin(0.5, 0)
+          .setDepth(101);
+        const costText = this.add
+          .text(optionX, optionY + 21, `建材 ${cost}`, {
+            fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+            fontSize: '12px',
+            color: '#ffd16a',
+            fontStyle: 'bold',
+          })
+          .setOrigin(0.5, 0)
+          .setDepth(101);
+        this.trackBuildMenuObject(labelText);
+        this.trackBuildMenuObject(costText);
 
         box.on(
           'pointerdown',
@@ -1300,8 +1457,11 @@ export class GameScene extends Phaser.Scene {
         box.on('pointerout', () => box.setFillStyle(0x151a20, 1));
 
         this.buildButtons.push({ option, box });
-        row += 1;
-      }
+      });
+
+      yCursor +=
+        Math.ceil(group.optionIds.length / BUILD_MENU_CARD_COLUMNS.length) *
+          (BUILD_MENU_CARD_HEIGHT + BUILD_MENU_GAP);
     }
   }
 
@@ -1380,6 +1540,7 @@ export class GameScene extends Phaser.Scene {
                 this.modifiers.turretDamage * config.damageMultiplier,
                 config.stunMs ?? 0,
                 config.color,
+                config.areaEffect,
               );
             }
           : null,
@@ -1434,6 +1595,7 @@ export class GameScene extends Phaser.Scene {
     damage: number,
     stunMs: number,
     color: number,
+    effect: AreaExplosionType | undefined,
   ): void {
     for (const enemy of this.enemies) {
       if (!enemy.active) {
@@ -1454,7 +1616,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.explosion(position, color, Math.max(0.75, radius / 80));
+    this.showAreaImpact(position, radius, color, effect);
   }
 
   private findNearestEnemy(
@@ -1936,7 +2098,7 @@ export class GameScene extends Phaser.Scene {
     this.ui.selected.setText(
       `モード:${this.modeLabel(this.mode)}  選択:${buildLabel}  向き:${this.directionLabel(
         this.direction,
-      )}  機能:${this.selectedBuildDescription()}`,
+      )}\n機能:${this.selectedBuildDescription()}`,
     );
     this.ui.readyButton
       .setFillStyle(this.wave.state === 'preparation' ? 0x1f4c3a : 0x24303a, 1)

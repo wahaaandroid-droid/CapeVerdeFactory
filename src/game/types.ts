@@ -17,7 +17,6 @@ export type Direction = 'up' | 'right' | 'down' | 'left';
 export type Terrain =
   | 'ground'
   | 'lava'
-  | 'geothermal'
   | 'resource'
   | 'resourceCopper'
   | 'resourceOil'
