@@ -4,6 +4,7 @@ import {
   Cell,
   GRID_HEIGHT,
   GRID_WIDTH,
+  LEFT_EXPANSION_COLUMNS,
   MAP_ORIGIN_X,
   MAP_ORIGIN_Y,
   ResourceKind,
@@ -19,29 +20,67 @@ interface ResourcePlacement {
   resource: ResourceKind;
 }
 
-const RANDOM_LAVA_COUNT = 28;
-const TOTAL_RESOURCE_COUNTS: Record<ResourceKind, number> = {
-  iron: 9,
-  copper: 8,
-  oil: 8,
-};
-const STARTER_BASE_CELLS: Cell[] = [
-  { x: 2, y: 9 },
-  { x: 3, y: 9 },
-  { x: 4, y: 9 },
-  { x: 5, y: 9 },
-  { x: 6, y: 9 },
-  { x: 7, y: 9 },
-  { x: 8, y: 9 },
-  { x: 9, y: 9 },
-  { x: 9, y: 10 },
-  { x: 4, y: 11 },
-  { x: 9, y: 11 },
-  { x: 10, y: 11 },
-  { x: 11, y: 11 },
+const shifted = (x: number, y: number): Cell => ({
+  x: x + LEFT_EXPANSION_COLUMNS,
+  y,
+});
+const fixedCell = (x: number, y: number): Cell => ({ x, y });
+const FIXED_LAVA_CELLS: Cell[] = [
+  fixedCell(1, 16),
+  fixedCell(2, 16),
+  fixedCell(3, 17),
+  fixedCell(5, 2),
+  fixedCell(10, 3),
+  fixedCell(11, 3),
+  fixedCell(12, 4),
+  fixedCell(18, 15),
+  fixedCell(19, 15),
+  fixedCell(20, 16),
+  fixedCell(27, 6),
+  fixedCell(28, 6),
+  fixedCell(28, 7),
+  shifted(2, 15),
+  shifted(3, 15),
+  shifted(3, 16),
+  shifted(4, 16),
+  shifted(7, 3),
+  shifted(8, 3),
+  shifted(8, 4),
+  shifted(15, 2),
+  shifted(16, 2),
+  shifted(16, 3),
+  shifted(15, 15),
+  shifted(16, 15),
+  shifted(16, 16),
+  shifted(12, 17),
+  shifted(13, 17),
 ];
 const FIXED_RESOURCE_PLACEMENTS: ResourcePlacement[] = [
-  { cell: { x: 2, y: 9 }, resource: 'iron' },
+  { cell: fixedCell(2, 9), resource: 'iron' },
+  { cell: fixedCell(5, 4), resource: 'iron' },
+  { cell: fixedCell(18, 7), resource: 'iron' },
+  { cell: shifted(4, 8), resource: 'iron' },
+  { cell: shifted(2, 5), resource: 'iron' },
+  { cell: shifted(6, 16), resource: 'iron' },
+  { cell: fixedCell(14, 5), resource: 'iron' },
+  { cell: fixedCell(30, 11), resource: 'iron' },
+  { cell: shifted(8, 12), resource: 'iron' },
+  { cell: fixedCell(11, 12), resource: 'copper' },
+  { cell: fixedCell(25, 15), resource: 'copper' },
+  { cell: fixedCell(31, 5), resource: 'copper' },
+  { cell: shifted(4, 14), resource: 'copper' },
+  { cell: shifted(15, 6), resource: 'copper' },
+  { cell: fixedCell(16, 14), resource: 'copper' },
+  { cell: fixedCell(33, 7), resource: 'copper' },
+  { cell: shifted(9, 4), resource: 'copper' },
+  { cell: fixedCell(7, 14), resource: 'oil' },
+  { cell: fixedCell(22, 10), resource: 'oil' },
+  { cell: fixedCell(34, 13), resource: 'oil' },
+  { cell: shifted(10, 8), resource: 'oil' },
+  { cell: shifted(13, 14), resource: 'oil' },
+  { cell: fixedCell(13, 16), resource: 'oil' },
+  { cell: fixedCell(29, 3), resource: 'oil' },
+  { cell: shifted(17, 13), resource: 'oil' },
 ];
 const RESOURCE_TERRAIN: Record<ResourceKind, Terrain> = {
   iron: 'resource',
@@ -204,32 +243,13 @@ export class GridSystem {
   }
 
   private generateMap(): void {
-    const reserved = new Set(STARTER_BASE_CELLS.map((cell) => cellKey(cell)));
-    const lava = this.randomCellKeys(RANDOM_LAVA_COUNT, reserved);
-    const occupied = new Set([...reserved, ...lava]);
+    const lava = new Set(FIXED_LAVA_CELLS.map((cell) => cellKey(cell)));
     const resources = new Map<string, ResourceKind>(
       FIXED_RESOURCE_PLACEMENTS.map((placement) => [
         cellKey(placement.cell),
         placement.resource,
       ]),
     );
-
-    for (const [resource, totalCount] of Object.entries(TOTAL_RESOURCE_COUNTS) as [
-      ResourceKind,
-      number,
-    ][]) {
-      const fixedCount = FIXED_RESOURCE_PLACEMENTS.filter(
-        (placement) => placement.resource === resource,
-      ).length;
-      const keys = this.randomCellKeys(
-        Math.max(0, totalCount - fixedCount),
-        occupied,
-      );
-      for (const key of keys) {
-        occupied.add(key);
-        resources.set(key, resource);
-      }
-    }
 
     for (let y = 0; y < GRID_HEIGHT; y += 1) {
       const row: Tile[] = [];
@@ -256,21 +276,6 @@ export class GridSystem {
       }
       this.tiles.push(row);
     }
-  }
-
-  private randomCellKeys(count: number, excluded: Set<string>): Set<string> {
-    const candidates: string[] = [];
-    for (let y = 0; y < GRID_HEIGHT; y += 1) {
-      for (let x = 0; x < GRID_WIDTH - 2; x += 1) {
-        const key = `${x},${y}`;
-        if (!excluded.has(key)) {
-          candidates.push(key);
-        }
-      }
-    }
-
-    const shuffled = Phaser.Utils.Array.Shuffle(candidates);
-    return new Set(shuffled.slice(0, count));
   }
 
   private registerWorld(

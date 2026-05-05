@@ -26,6 +26,7 @@ import {
   GAME_WIDTH,
   GRID_HEIGHT,
   GRID_WIDTH,
+  ITEM_DEFS,
   ItemType,
   MAP_HEIGHT_PX,
   MAP_ORIGIN_X,
@@ -481,6 +482,24 @@ interface BuildButton {
   box: Phaser.GameObjects.Rectangle;
 }
 
+interface SavedBuildingState {
+  type: BuildingType;
+  cell: Cell;
+  direction: Direction;
+  conveyorVariant: ConveyorVariant;
+  hp: number;
+  alive: boolean;
+  item: ItemType | null;
+  storage: Partial<Record<ItemType, number>>;
+}
+
+interface SavedFactoryState {
+  version: 1;
+  buildings: SavedBuildingState[];
+}
+
+const FACTORY_SAVE_KEY = 'cape-verde-factory.factoryState.v1';
+
 export class GameScene extends Phaser.Scene {
   grid!: GridSystem;
   factory!: FactorySystem;
@@ -585,7 +604,7 @@ export class GameScene extends Phaser.Scene {
     this.preview = this.add.graphics().setDepth(85);
 
     this.createPools();
-    this.createStarterBase();
+    this.createFactoryFromSaveOrStarterBase();
     this.captureInitialWorldObjects();
     this.configureCameras();
     this.createUi();
@@ -818,7 +837,8 @@ export class GameScene extends Phaser.Scene {
   winGame(): void {
     this.gameEnded = true;
     this.wave.stop();
-    this.showEndOverlay('CLEAR', '10ウェーブ防衛成功');
+    this.saveFactoryState();
+    this.showEndOverlay('CLEAR', '10ウェーブ防衛成功。工場状態を保存しました');
   }
 
   registerWorldObject(object: Phaser.GameObjects.GameObject): void {
@@ -1012,6 +1032,14 @@ export class GameScene extends Phaser.Scene {
       .setStrokeStyle(2, 0x6f5944, 1);
   }
 
+  private createFactoryFromSaveOrStarterBase(): void {
+    if (this.restoreSavedFactoryState()) {
+      return;
+    }
+
+    this.createStarterBase();
+  }
+
   private createStarterBase(): void {
     this.core = this.factory.createBuilding('core', { x: 4, y: 11 }, 'up');
     this.factory.createBuilding('miner', { x: 2, y: 9 }, 'right');
@@ -1029,6 +1057,181 @@ export class GameScene extends Phaser.Scene {
 
     ammoFactory.oreStored = 2;
     turret.ammoStored = 8;
+  }
+
+  private restoreSavedFactoryState(): boolean {
+    const saved = this.loadSavedFactoryState();
+    if (!saved) {
+      return false;
+    }
+
+    const coreState = saved.buildings.find((building) => building.type === 'core');
+    if (!coreState) {
+      return false;
+    }
+
+    const restored: { building: Building; state: SavedBuildingState }[] = [];
+    for (const state of saved.buildings) {
+      if (!this.isValidSavedBuilding(state)) {
+        continue;
+      }
+
+      const building = this.factory.createBuilding(
+        state.type,
+        state.cell,
+        state.direction,
+        state.conveyorVariant,
+      );
+      restored.push({ building, state });
+      if (state.type === 'core') {
+        this.core = building;
+      }
+    }
+
+    if (!this.core) {
+      return false;
+    }
+
+    for (const { building, state } of restored) {
+      building.setDirection(state.direction);
+      building.setConveyorVariant(state.conveyorVariant);
+      this.applySavedBuildingState(building, state);
+      this.factory.refreshAutoConveyorsAround(building.cell);
+    }
+
+    this.setStatus('前回の工場状態を引き継ぎました', 3200);
+    return true;
+  }
+
+  private loadSavedFactoryState(): SavedFactoryState | null {
+    try {
+      const raw = window.localStorage.getItem(FACTORY_SAVE_KEY);
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = JSON.parse(raw) as Partial<SavedFactoryState>;
+      if (parsed.version !== 1 || !Array.isArray(parsed.buildings)) {
+        return null;
+      }
+
+      return {
+        version: 1,
+        buildings: parsed.buildings.filter((building) =>
+          this.isValidSavedBuilding(building),
+        ),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private saveFactoryState(): void {
+    try {
+      const state: SavedFactoryState = {
+        version: 1,
+        buildings: this.grid.allBuildings().map((building) =>
+          this.serializeBuildingState(building),
+        ),
+      };
+      window.localStorage.setItem(FACTORY_SAVE_KEY, JSON.stringify(state));
+    } catch {
+      this.setStatus('工場状態の保存に失敗しました');
+    }
+  }
+
+  private serializeBuildingState(building: Building): SavedBuildingState {
+    const storage: Partial<Record<ItemType, number>> = {};
+    for (const item of building.storedItems()) {
+      storage[item] = building.stored(item);
+    }
+
+    return {
+      type: building.type,
+      cell: { ...building.cell },
+      direction: building.direction,
+      conveyorVariant: building.conveyorVariant,
+      hp: building.type === 'core' ? building.maxHp : building.hp,
+      alive: building.type === 'core' ? true : building.alive,
+      item: building.item,
+      storage,
+    };
+  }
+
+  private applySavedBuildingState(
+    building: Building,
+    state: SavedBuildingState,
+  ): void {
+    if (building.type === 'core') {
+      building.repairFull();
+    } else if (!state.alive || state.hp <= 0) {
+      building.damage(building.maxHp);
+    } else if (state.hp < building.maxHp) {
+      building.damage(building.maxHp - state.hp);
+    }
+
+    if (building.alive) {
+      building.setItem(state.item);
+      for (const [item, amount] of Object.entries(state.storage)) {
+        if (this.isItemType(item) && typeof amount === 'number') {
+          building.setStored(item, amount);
+        }
+      }
+    }
+  }
+
+  private isValidSavedBuilding(
+    value: unknown,
+  ): value is SavedBuildingState {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const state = value as Partial<SavedBuildingState>;
+    return (
+      this.isBuildingType(state.type) &&
+      this.isCell(state.cell) &&
+      this.isDirection(state.direction) &&
+      this.isConveyorVariant(state.conveyorVariant) &&
+      typeof state.hp === 'number' &&
+      typeof state.alive === 'boolean' &&
+      (state.item === null || this.isItemType(state.item)) &&
+      Boolean(state.storage) &&
+      typeof state.storage === 'object'
+    );
+  }
+
+  private isCell(value: unknown): value is Cell {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const cell = value as Partial<Cell>;
+    const x = cell.x;
+    const y = cell.y;
+    return (
+      typeof x === 'number' &&
+      typeof y === 'number' &&
+      Number.isInteger(x) &&
+      Number.isInteger(y) &&
+      this.grid.inBounds({ x, y })
+    );
+  }
+
+  private isBuildingType(value: unknown): value is BuildingType {
+    return typeof value === 'string' && value in BUILDING_DEFS;
+  }
+
+  private isDirection(value: unknown): value is Direction {
+    return typeof value === 'string' && value in DIRECTION_ANGLES;
+  }
+
+  private isConveyorVariant(value: unknown): value is ConveyorVariant {
+    return typeof value === 'string' && value in CONVEYOR_DEFS;
+  }
+
+  private isItemType(value: unknown): value is ItemType {
+    return typeof value === 'string' && value in ITEM_DEFS;
   }
 
   private createPools(): void {
@@ -2502,7 +2705,8 @@ export class GameScene extends Phaser.Scene {
 
     this.gameEnded = true;
     this.wave.stop();
-    this.showEndOverlay('GAME OVER', 'コアが破壊された');
+    this.saveFactoryState();
+    this.showEndOverlay('GAME OVER', 'コアが破壊された。工場状態を保存しました');
   }
 
   private toggleRecipeOverlay(): void {
