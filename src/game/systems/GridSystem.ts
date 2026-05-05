@@ -4,7 +4,6 @@ import {
   Cell,
   GRID_HEIGHT,
   GRID_WIDTH,
-  LEFT_EXPANSION_COLUMNS,
   MAP_ORIGIN_X,
   MAP_ORIGIN_Y,
   ResourceKind,
@@ -14,6 +13,41 @@ import {
   cellKey,
   manhattan,
 } from '../types';
+
+interface ResourcePlacement {
+  cell: Cell;
+  resource: ResourceKind;
+}
+
+const RANDOM_LAVA_COUNT = 28;
+const TOTAL_RESOURCE_COUNTS: Record<ResourceKind, number> = {
+  iron: 9,
+  copper: 8,
+  oil: 8,
+};
+const STARTER_BASE_CELLS: Cell[] = [
+  { x: 2, y: 9 },
+  { x: 3, y: 9 },
+  { x: 4, y: 9 },
+  { x: 5, y: 9 },
+  { x: 6, y: 9 },
+  { x: 7, y: 9 },
+  { x: 8, y: 9 },
+  { x: 9, y: 9 },
+  { x: 9, y: 10 },
+  { x: 4, y: 11 },
+  { x: 9, y: 11 },
+  { x: 10, y: 11 },
+  { x: 11, y: 11 },
+];
+const FIXED_RESOURCE_PLACEMENTS: ResourcePlacement[] = [
+  { cell: { x: 2, y: 9 }, resource: 'iron' },
+];
+const RESOURCE_TERRAIN: Record<ResourceKind, Terrain> = {
+  iron: 'resource',
+  copper: 'resourceCopper',
+  oil: 'resourceOil',
+};
 
 export class GridSystem {
   readonly tiles: Tile[][] = [];
@@ -170,90 +204,73 @@ export class GridSystem {
   }
 
   private generateMap(): void {
-    const old = (x: number, y: number) => `${x + LEFT_EXPANSION_COLUMNS},${y}`;
-    const lava = new Set([
-      '1,16',
-      '2,16',
-      '3,17',
-      '5,2',
-      '10,3',
-      '11,3',
-      '12,4',
-      '18,15',
-      '19,15',
-      '20,16',
-      '27,6',
-      '28,6',
-      '28,7',
-      old(2, 15),
-      old(3, 15),
-      old(3, 16),
-      old(4, 16),
-      old(7, 3),
-      old(8, 3),
-      old(8, 4),
-      old(15, 2),
-      old(16, 2),
-      old(16, 3),
-      old(15, 15),
-      old(16, 15),
-      old(16, 16),
-      old(12, 17),
-      old(13, 17),
-    ]);
-    const iron = new Set([
-      '2,9',
-      '5,4',
-      '18,7',
-      old(4, 8),
-      old(2, 5),
-      old(6, 16),
-    ]);
-    const copper = new Set([
-      '11,12',
-      '25,15',
-      '31,5',
-      old(4, 14),
-      old(15, 6),
-    ]);
-    const oil = new Set([
-      '7,14',
-      '22,10',
-      '34,13',
-      old(10, 8),
-      old(13, 14),
-    ]);
+    const reserved = new Set(STARTER_BASE_CELLS.map((cell) => cellKey(cell)));
+    const lava = this.randomCellKeys(RANDOM_LAVA_COUNT, reserved);
+    const occupied = new Set([...reserved, ...lava]);
+    const resources = new Map<string, ResourceKind>(
+      FIXED_RESOURCE_PLACEMENTS.map((placement) => [
+        cellKey(placement.cell),
+        placement.resource,
+      ]),
+    );
+
+    for (const [resource, totalCount] of Object.entries(TOTAL_RESOURCE_COUNTS) as [
+      ResourceKind,
+      number,
+    ][]) {
+      const fixedCount = FIXED_RESOURCE_PLACEMENTS.filter(
+        (placement) => placement.resource === resource,
+      ).length;
+      const keys = this.randomCellKeys(
+        Math.max(0, totalCount - fixedCount),
+        occupied,
+      );
+      for (const key of keys) {
+        occupied.add(key);
+        resources.set(key, resource);
+      }
+    }
+
     for (let y = 0; y < GRID_HEIGHT; y += 1) {
       const row: Tile[] = [];
       for (let x = 0; x < GRID_WIDTH; x += 1) {
         const key = `${x},${y}`;
         let terrain: Terrain = 'ground';
+        const resource = resources.get(key);
 
         if (x >= GRID_WIDTH - 2) {
           terrain = 'ocean';
         } else if (lava.has(key)) {
           terrain = 'lava';
-        } else if (iron.has(key)) {
-          terrain = 'resource';
-        } else if (copper.has(key)) {
-          terrain = 'resourceCopper';
-        } else if (oil.has(key)) {
-          terrain = 'resourceOil';
+        } else if (resource) {
+          terrain = RESOURCE_TERRAIN[resource];
         }
 
-        const resource =
-          terrain === 'resource'
-            ? 'iron'
-            : terrain === 'resourceCopper'
-              ? 'copper'
-              : terrain === 'resourceOil'
-                ? 'oil'
-                : undefined;
-
-        row.push({ terrain, resource });
+        row.push({
+          terrain,
+          resource:
+            resource && terrain === RESOURCE_TERRAIN[resource]
+              ? resource
+              : undefined,
+        });
       }
       this.tiles.push(row);
     }
+  }
+
+  private randomCellKeys(count: number, excluded: Set<string>): Set<string> {
+    const candidates: string[] = [];
+    for (let y = 0; y < GRID_HEIGHT; y += 1) {
+      for (let x = 0; x < GRID_WIDTH - 2; x += 1) {
+        const key = `${x},${y}`;
+        if (!excluded.has(key)) {
+          candidates.push(key);
+        }
+      }
+    }
+
+    const shuffled = Phaser.Utils.Array.Shuffle(candidates);
+    return new Set(shuffled.slice(0, count));
   }
 
   private registerWorld(
