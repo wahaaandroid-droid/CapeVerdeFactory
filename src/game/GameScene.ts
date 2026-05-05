@@ -519,6 +519,8 @@ export class GameScene extends Phaser.Scene {
   private lastPanPoint: Phaser.Math.Vector2 | null = null;
   private isConveyorPainting = false;
   private lastConveyorPaintCell: Cell | null = null;
+  private isDemolishDragging = false;
+  private lastDemolishCell: Cell | null = null;
   private gameEnded = false;
   private statusMessage = '準備フェーズでラインを組み、準備完了で戦闘開始';
   private statusUntil = 0;
@@ -1071,6 +1073,8 @@ export class GameScene extends Phaser.Scene {
         if (this.mode === 'move') {
           this.tryMoveBuilding(pointer);
         } else if (this.mode === 'demolish') {
+          this.isDemolishDragging = true;
+          this.lastDemolishCell = null;
           this.tryDemolish(pointer);
         } else {
           if (this.selectedBuild === 'conveyor') {
@@ -1096,11 +1100,20 @@ export class GameScene extends Phaser.Scene {
       ) {
         this.tryPlace(pointer, true);
       }
+
+      if (
+        this.isDemolishDragging &&
+        pointer.leftButtonDown() &&
+        this.mode === 'demolish'
+      ) {
+        this.tryDemolish(pointer, true);
+      }
     });
 
     this.input.on('pointerup', () => {
       this.stopPan();
       this.stopConveyorPainting();
+      this.stopDemolishing();
     });
     this.input.on('wheel', (pointer: Phaser.Input.Pointer, _objects: unknown[], _dx: number, dy: number) => {
       if (this.isPointerInWorldView(pointer)) {
@@ -1227,6 +1240,11 @@ export class GameScene extends Phaser.Scene {
   private stopConveyorPainting(): void {
     this.isConveyorPainting = false;
     this.lastConveyorPaintCell = null;
+  }
+
+  private stopDemolishing(): void {
+    this.isDemolishDragging = false;
+    this.lastDemolishCell = null;
   }
 
   private zoomAtPointer(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
@@ -2041,21 +2059,43 @@ export class GameScene extends Phaser.Scene {
     this.setStatus(`${BUILDING_DEFS[building.type].label}を移設`);
   }
 
-  private tryDemolish(pointer: Phaser.Input.Pointer): void {
+  private tryDemolish(pointer: Phaser.Input.Pointer, continuous = false): boolean {
     if (this.wave.state !== 'preparation') {
-      this.setStatus('戦闘中は解体できません');
-      return;
+      if (!continuous) {
+        this.setStatus('戦闘中は解体できません');
+      }
+      return false;
     }
 
     const cell = this.pointerToCell(pointer);
     if (!cell) {
-      return;
+      return false;
     }
 
+    if (continuous && this.lastDemolishCell && sameCell(this.lastDemolishCell, cell)) {
+      return false;
+    }
+
+    const cells = this.lastDemolishCell
+      ? this.cellsBetween(this.lastDemolishCell, cell).slice(1)
+      : [cell];
+    this.lastDemolishCell = { ...cell };
+
+    let demolished = false;
+    for (const targetCell of cells) {
+      demolished = this.demolishCell(targetCell, continuous) || demolished;
+    }
+
+    return demolished;
+  }
+
+  private demolishCell(cell: Cell, continuous: boolean): boolean {
     const building = this.grid.getBuilding(cell);
     if (!building?.alive || building.type === 'core') {
-      this.setStatus('解体する施設をクリック');
-      return;
+      if (!continuous) {
+        this.setStatus('解体する施設をクリック');
+      }
+      return false;
     }
 
     const refund = this.buildCost(building.type, building.conveyorVariant);
@@ -2063,7 +2103,40 @@ export class GameScene extends Phaser.Scene {
     this.parts += refund;
     this.factory.removeBuilding(building);
     this.floatText(position, `+${refund}`, 0xffd27a);
-    this.setStatus(`${BUILDING_DEFS[building.type].label}を解体`);
+    if (!continuous) {
+      this.setStatus(`${BUILDING_DEFS[building.type].label}を解体`);
+    }
+    return true;
+  }
+
+  private cellsBetween(from: Cell, to: Cell): Cell[] {
+    const cells: Cell[] = [];
+    let x = from.x;
+    let y = from.y;
+    const dx = Math.abs(to.x - from.x);
+    const dy = Math.abs(to.y - from.y);
+    const stepX = from.x < to.x ? 1 : -1;
+    const stepY = from.y < to.y ? 1 : -1;
+    let error = dx - dy;
+
+    while (true) {
+      cells.push({ x, y });
+      if (x === to.x && y === to.y) {
+        break;
+      }
+
+      const doubledError = error * 2;
+      if (doubledError > -dy) {
+        error -= dy;
+        x += stepX;
+      }
+      if (doubledError < dx) {
+        error += dx;
+        y += stepY;
+      }
+    }
+
+    return cells;
   }
 
   private repairAllBuildings(): void {
@@ -2197,6 +2270,7 @@ export class GameScene extends Phaser.Scene {
   private setMode(mode: InteractionMode, announce = true): void {
     this.mode = mode;
     this.stopConveyorPainting();
+    this.stopDemolishing();
     if (mode !== 'move') {
       this.movingBuilding = null;
     }
