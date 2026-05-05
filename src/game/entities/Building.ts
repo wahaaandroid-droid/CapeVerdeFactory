@@ -376,6 +376,14 @@ export class Building {
       return [this.direction, ...this.perpendicularDirections(this.direction)];
     }
 
+    if (this.conveyorVariant === 'undergroundInput') {
+      return [this.oppositeDirection(this.direction)];
+    }
+
+    if (this.conveyorVariant === 'undergroundOutput') {
+      return [this.direction];
+    }
+
     return [...DIRECTIONS];
   }
 

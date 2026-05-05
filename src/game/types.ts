@@ -63,7 +63,9 @@ export type ConveyorVariant =
   | 'curveDown'
   | 'curveUp'
   | 'junctionThree'
-  | 'junctionFour';
+  | 'junctionFour'
+  | 'undergroundInput'
+  | 'undergroundOutput';
 
 export interface Cell {
   x: number;
@@ -113,6 +115,8 @@ export const CONVEYOR_VARIANTS: ConveyorVariant[] = [
   'curveUp',
   'junctionThree',
   'junctionFour',
+  'undergroundInput',
+  'undergroundOutput',
 ];
 
 export const DIRECTION_VECTORS: Record<Direction, Cell> = {
@@ -361,6 +365,18 @@ export const CONVEYOR_DEFS: Record<ConveyorVariant, ConveyorVariantDefinition> =
     shortLabel: '+',
     description: '4方向を接続。空き方向へ自動分配',
     cost: 20,
+  },
+  undergroundInput: {
+    label: '地下入口',
+    shortLabel: 'IN',
+    description: '向きの先5マス以内にある地下出口へ物資を送る',
+    cost: 35,
+  },
+  undergroundOutput: {
+    label: '地下出口',
+    shortLabel: 'OUT',
+    description: '地下入口から受け取り、向きの方向へ物資を出す',
+    cost: 35,
   },
 };
 

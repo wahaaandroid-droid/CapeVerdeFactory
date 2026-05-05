@@ -15,6 +15,7 @@ import { GridSystem } from './GridSystem';
 
 const AUTO_CURVE_VARIANTS: ConveyorVariant[] = ['straight', 'curveDown', 'curveUp'];
 const CURVE_VARIANTS: ConveyorVariant[] = ['curveDown', 'curveUp'];
+const UNDERGROUND_CONVEYOR_MAX_DISTANCE = 5;
 const OUTPUT_BUILDINGS: BuildingType[] = [
   'miner',
   'ammoFactory',
@@ -403,6 +404,13 @@ export class FactorySystem {
     item: ItemType,
     direction: Direction,
   ): boolean {
+    if (
+      source.type === 'conveyor' &&
+      source.conveyorVariant === 'undergroundInput'
+    ) {
+      return this.outputToUndergroundExit(source, item, direction);
+    }
+
     const targetCell = neighbor(source.cell, direction);
     if (!this.grid.inBounds(targetCell)) {
       return false;
@@ -414,6 +422,52 @@ export class FactorySystem {
     }
 
     return this.tryReceiveItem(target, item, this.scene.time.now, source.cell);
+  }
+
+  private outputToUndergroundExit(
+    source: Building,
+    item: ItemType,
+    direction: Direction,
+  ): boolean {
+    const exit = this.findUndergroundExit(source.cell, direction);
+    if (!exit || exit.item) {
+      return false;
+    }
+
+    const incoming = this.oppositeDirection(exit.direction);
+    exit.setItem(
+      item,
+      this.scene.time.now,
+      this.scene.modifiers.beltIntervalMs,
+      incoming,
+      this.pickItemOutputDirection(exit, item, incoming),
+    );
+    exit.nextMoveAt = this.scene.time.now + this.scene.modifiers.beltIntervalMs;
+    exit.flash(0x7ddcff);
+    return true;
+  }
+
+  private findUndergroundExit(cell: Cell, direction: Direction): Building | null {
+    let cursor = { ...cell };
+
+    for (let distance = 1; distance <= UNDERGROUND_CONVEYOR_MAX_DISTANCE; distance += 1) {
+      cursor = neighbor(cursor, direction);
+      if (!this.grid.inBounds(cursor)) {
+        return null;
+      }
+
+      const building = this.grid.getBuilding(cursor);
+      if (
+        building?.alive &&
+        building.type === 'conveyor' &&
+        building.conveyorVariant === 'undergroundOutput' &&
+        building.direction === direction
+      ) {
+        return building;
+      }
+    }
+
+    return null;
   }
 
   private tryReceiveItem(
@@ -513,6 +567,10 @@ export class FactorySystem {
       return true;
     }
 
+    if (target.conveyorVariant === 'undergroundOutput') {
+      return false;
+    }
+
     const incoming = this.directionBetween(target.cell, sourceCell);
     return Boolean(incoming && this.inputDirections(target).includes(incoming));
   }
@@ -599,6 +657,14 @@ export class FactorySystem {
       return this.connectedDirectionsFor(variant, direction);
     }
 
+    if (variant === 'undergroundInput') {
+      return [this.oppositeDirection(direction)];
+    }
+
+    if (variant === 'undergroundOutput') {
+      return [];
+    }
+
     return this.rotateDirections(['left'], direction);
   }
 
@@ -614,6 +680,10 @@ export class FactorySystem {
       return this.connectedDirectionsFor(variant, direction);
     }
 
+    if (variant === 'undergroundInput' || variant === 'undergroundOutput') {
+      return [direction];
+    }
+
     return this.rotateDirections(
       variant === 'curveDown' ? ['down'] : ['up'],
       direction,
@@ -622,6 +692,10 @@ export class FactorySystem {
 
   private outputDirectionsForBuilding(building: Building): Direction[] {
     if (building.type === 'conveyor') {
+      if (building.conveyorVariant === 'undergroundInput') {
+        return [];
+      }
+
       return this.outputDirections(building);
     }
 

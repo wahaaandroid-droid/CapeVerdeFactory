@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import areaExplosionsUrl from '../../assets/images/area-explosions-generated.png';
 import generatedConveyorsUrl from '../../assets/sprites/generated-conveyors.png';
 import generatedSpritesUrl from '../../assets/sprites/generated-sprites.png';
+import undergroundConveyorsUrl from '../../assets/sprites/underground-conveyors-generated.png';
 import { Bullet } from './entities/Bullet';
 import { Building } from './entities/Building';
 import { CombatDrone } from './entities/CombatDrone';
@@ -104,6 +105,22 @@ const BUILD_OPTIONS: BuildOption[] = [
     label: '十字コンベア',
     detail: '4方向を自動分配',
     iconKey: 'conveyor-junctionFour',
+  },
+  {
+    id: 'conveyor-underground-input',
+    type: 'conveyor',
+    conveyorVariant: 'undergroundInput',
+    label: '地下入口',
+    detail: '5マス先へ送る',
+    iconKey: 'conveyor-undergroundInput',
+  },
+  {
+    id: 'conveyor-underground-output',
+    type: 'conveyor',
+    conveyorVariant: 'undergroundOutput',
+    label: '地下出口',
+    detail: '地下から出す',
+    iconKey: 'conveyor-undergroundOutput',
   },
   {
     id: 'ammoFactory',
@@ -221,7 +238,13 @@ const BUILD_GROUPS: BuildGroupDefinition[] = [
   {
     id: 'logistics',
     label: '搬送ライン',
-    optionIds: ['conveyor-straight', 'conveyor-junction-three', 'conveyor-junction-four'],
+    optionIds: [
+      'conveyor-straight',
+      'conveyor-junction-three',
+      'conveyor-junction-four',
+      'conveyor-underground-input',
+      'conveyor-underground-output',
+    ],
   },
   {
     id: 'production',
@@ -288,8 +311,8 @@ const RECIPE_GUIDE_PAGES: RecipeGuidePage[] = [
       {
         title: '搬送ライン',
         subtitle: '物資を運ぶ',
-        body: '直進、T字、十字コンベアで施設間を接続します。分岐は流れから自動判定します。',
-        icons: ['building-conveyor', 'conveyor-junctionThree', 'conveyor-junctionFour'],
+        body: '直進、T字、十字、地下コンベアで施設間を接続します。分岐は流れから自動判定します。',
+        icons: ['building-conveyor', 'conveyor-junctionThree', 'conveyor-undergroundInput', 'conveyor-undergroundOutput'],
         accent: 0xf3c53c,
       },
       {
@@ -533,6 +556,10 @@ export class GameScene extends Phaser.Scene {
     this.load.spritesheet('generated-conveyors', generatedConveyorsUrl, {
       frameWidth: 128,
       frameHeight: 128,
+    });
+    this.load.spritesheet('underground-conveyors', undergroundConveyorsUrl, {
+      frameWidth: 30,
+      frameHeight: 30,
     });
     this.load.image('area-explosions-generated', areaExplosionsUrl);
   }
@@ -855,6 +882,8 @@ export class GameScene extends Phaser.Scene {
       { key: 'conveyor-curveUp', sheet: 'generated-conveyors', frame: 1, width: 30, height: 30 },
       { key: 'conveyor-junctionThree', sheet: 'generated-conveyors', frame: 2, width: 30, height: 30 },
       { key: 'conveyor-junctionFour', sheet: 'generated-conveyors', frame: 4, width: 30, height: 30 },
+      { key: 'conveyor-undergroundInput', sheet: 'underground-conveyors', frame: 0, width: 30, height: 30 },
+      { key: 'conveyor-undergroundOutput', sheet: 'underground-conveyors', frame: 1, width: 30, height: 30 },
     ];
 
     for (const entry of entries) {
