@@ -34,6 +34,30 @@ const UPGRADES: UpgradeDefinition[] = [
     body: 'コアHP +120',
     color: 0x69e47c,
   },
+  {
+    id: 'ammoSaver',
+    title: '弾薬節約',
+    body: '射撃時に弾を温存',
+    color: 0xffd16a,
+  },
+  {
+    id: 'specialist',
+    title: '特殊兵器強化',
+    body: '通常以外の砲台威力 +25%',
+    color: 0x68d7ff,
+  },
+  {
+    id: 'stockpile',
+    title: '建材備蓄',
+    body: '建材 +220',
+    color: 0xd9a85f,
+  },
+  {
+    id: 'droneOps',
+    title: '航空管制',
+    body: 'ドローン火力 +35%',
+    color: 0x9de8ff,
+  },
 ];
 
 export class UpgradeSystem {
@@ -43,7 +67,10 @@ export class UpgradeSystem {
 
   show(): void {
     this.hide();
-    const choices = Phaser.Utils.Array.Shuffle([...UPGRADES]).slice(0, 3);
+    const available = UPGRADES.filter((upgrade) =>
+      this.scene.isUpgradeUnlocked(upgrade.id),
+    );
+    const choices = Phaser.Utils.Array.Shuffle(available).slice(0, 3);
     const container = this.scene.add.container(0, 0).setDepth(200);
     this.scene.registerUiObject(container);
     const shade = this.scene.add.rectangle(0, 0, 1180, 760, 0x010409, 0.62).setOrigin(0);

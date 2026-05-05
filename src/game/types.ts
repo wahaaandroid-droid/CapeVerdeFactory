@@ -57,7 +57,15 @@ export type BuildingType =
   | 'droneTower'
   | 'wall';
 export type EnemyType = 'small' | 'heavy' | 'suicide';
-export type UpgradeId = 'turret' | 'belt' | 'production' | 'repair';
+export type UpgradeId =
+  | 'turret'
+  | 'belt'
+  | 'production'
+  | 'repair'
+  | 'ammoSaver'
+  | 'specialist'
+  | 'stockpile'
+  | 'droneOps';
 export type ConveyorVariant =
   | 'straight'
   | 'curveDown'

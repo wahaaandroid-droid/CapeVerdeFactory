@@ -33,14 +33,17 @@ import {
   MAP_ORIGIN_Y,
   MAP_WIDTH_PX,
   TILE_SIZE,
+  ResourceKind,
   UpgradeId,
   WORLD_VIEW_HEIGHT,
   WORLD_VIEW_WIDTH,
   WORLD_VIEW_X,
   WORLD_VIEW_Y,
   manhattan,
+  neighbor,
   rotateDirection,
   sameCell,
+  storageCapacity,
 } from './types';
 
 type BuildableType = Exclude<BuildingType, 'core'>;
@@ -60,6 +63,14 @@ interface BuildGroupDefinition {
   id: BuildGroupId;
   label: string;
   optionIds: string[];
+}
+
+interface StageDefinition {
+  id: number;
+  label: string;
+  unlockWave: number;
+  objective: string;
+  unlockSummary: string;
 }
 
 interface RecipeGuideCard {
@@ -274,6 +285,84 @@ const BUILD_GROUPS: BuildGroupDefinition[] = [
     ],
   },
 ];
+
+const STAGE_DEFS: StageDefinition[] = [
+  {
+    id: 1,
+    label: 'STAGE 1 鉄と通常弾',
+    unlockWave: 0,
+    objective: '鉄を掘り、弾薬工場からタレットへ弾を送る',
+    unlockSummary: '採掘機 / 直線搬送 / 弾薬工場 / タレット',
+  },
+  {
+    id: 2,
+    label: 'STAGE 2 銅と強化弾',
+    unlockWave: 1,
+    objective: '銅を加工し、強化弾で重装ドローンに備える',
+    unlockSummary: '銅加工 / 分岐搬送 / 特殊弾 / スナイパー',
+  },
+  {
+    id: 3,
+    label: 'STAGE 3 原油と範囲制圧',
+    unlockWave: 3,
+    objective: '原油を燃料と樹脂に分け、焼夷弾とEMPを作る',
+    unlockSummary: '化学工場 / 地下搬送 / 大型砲台 / EMP砲台',
+  },
+  {
+    id: 4,
+    label: 'STAGE 4 大型兵器',
+    unlockWave: 5,
+    objective: 'ミサイルかドローンの長い生産ラインを完成させる',
+    unlockSummary: 'ミサイル / ドローン / 長射程防衛',
+  },
+];
+
+const BUILD_OPTION_UNLOCK_WAVES: Record<string, number> = {
+  miner: 0,
+  'conveyor-straight': 0,
+  ammoFactory: 0,
+  turret: 0,
+  wall: 0,
+  'conveyor-junction-three': 1,
+  'conveyor-junction-four': 1,
+  metalPlateFactory: 1,
+  wireFactory: 1,
+  specialAmmoFactory: 1,
+  sniperTurret: 1,
+  'conveyor-underground-input': 3,
+  'conveyor-underground-output': 3,
+  plasticFactory: 3,
+  fuelFactory: 3,
+  cannonTurret: 3,
+  empTurret: 3,
+  missileFactory: 5,
+  droneFactory: 5,
+  missileTurret: 5,
+  droneTower: 5,
+};
+
+const BUILDING_INPUT_HINTS: Partial<Record<BuildingType, string>> = {
+  ammoFactory: '鉄を入れると通常弾を作ります',
+  metalPlateFactory: '鉄か銅を入れると金属板を作ります',
+  wireFactory: '銅を入れるとワイヤーを作ります',
+  plasticFactory: '原油を入れると樹脂を作ります',
+  fuelFactory: '原油を入れると燃料を作ります',
+  specialAmmoFactory: '鉄板+銅板、鉄板+燃料、線+樹脂を受け取ります',
+  missileFactory: '鉄板2+線2+燃料4を受け取ります',
+  droneFactory: '鉄板5+線5+樹脂5を受け取ります',
+};
+
+const BUILDING_PRODUCT_ITEMS: Partial<Record<BuildingType, ItemType[]>> = {
+  miner: ['ironOre', 'copperOre', 'oil'],
+  ammoFactory: ['ammo'],
+  metalPlateFactory: ['ironPlate', 'copperPlate'],
+  wireFactory: ['wire'],
+  plasticFactory: ['plastic'],
+  fuelFactory: ['fuel'],
+  specialAmmoFactory: ['enhancedAmmo', 'incendiaryAmmo', 'empAmmo'],
+  missileFactory: ['missile'],
+  droneFactory: ['drone'],
+};
 
 const BUILD_OPTION_BY_ID = new Map(BUILD_OPTIONS.map((option) => [option.id, option]));
 const BUILD_MENU_START_Y = 306;
@@ -506,12 +595,15 @@ export class GameScene extends Phaser.Scene {
   wave!: WaveSystem;
   upgrades!: UpgradeSystem;
   core!: Building;
-  parts = 1000000;
+  parts = 420;
   modifiers = {
     turretDamage: 34,
     turretRange: 165,
     beltIntervalMs: 520,
     productionIntervalMs: 1650,
+    ammoSaveChance: 0,
+    specialDamageMultiplier: 1,
+    droneDamageMultiplier: 1,
   };
 
   private selectedBuild: BuildableType = 'conveyor';
@@ -546,11 +638,13 @@ export class GameScene extends Phaser.Scene {
   private audioContext?: AudioContext;
   private ui!: {
     wave: Phaser.GameObjects.Text;
+    stage: Phaser.GameObjects.Text;
     phase: Phaser.GameObjects.Text;
     core: Phaser.GameObjects.Text;
     parts: Phaser.GameObjects.Text;
     ore: Phaser.GameObjects.Text;
     ammo: Phaser.GameObjects.Text;
+    objective: Phaser.GameObjects.Text;
     controls: Phaser.GameObjects.Text;
     selected: Phaser.GameObjects.Text;
     status: Phaser.GameObjects.Text;
@@ -670,6 +764,17 @@ export class GameScene extends Phaser.Scene {
     this.explosion(position, 0xff9b38, 0.55);
   }
 
+  onWaveCleared(wave: number): void {
+    const bonus = 90 + wave * 35;
+    this.parts += bonus;
+    const unlockedStage = STAGE_DEFS.find((stage) => stage.unlockWave === wave);
+    const unlockText = unlockedStage
+      ? ` / ${unlockedStage.label}解禁: ${unlockedStage.unlockSummary}`
+      : '';
+    this.setStatus(`ウェーブ${wave}クリア: 建材+${bonus}${unlockText}`, 4200);
+    this.createBuildMenu();
+  }
+
   applyUpgrade(id: UpgradeId): void {
     if (id === 'turret') {
       this.modifiers.turretDamage *= 1.2;
@@ -686,10 +791,37 @@ export class GameScene extends Phaser.Scene {
         Math.floor(this.modifiers.productionIntervalMs * 0.82),
       );
       this.setStatus('生産速度が上昇');
-    } else {
+    } else if (id === 'repair') {
       this.core.heal(120);
       this.setStatus('コアHPを回復');
+    } else if (id === 'ammoSaver') {
+      this.modifiers.ammoSaveChance = Math.min(
+        0.45,
+        this.modifiers.ammoSaveChance + 0.16,
+      );
+      this.setStatus('弾薬節約率が上昇');
+    } else if (id === 'specialist') {
+      this.modifiers.specialDamageMultiplier *= 1.25;
+      this.setStatus('特殊兵器の威力が上昇');
+    } else if (id === 'droneOps') {
+      this.modifiers.droneDamageMultiplier *= 1.35;
+      this.setStatus('ドローン火力が上昇');
+    } else {
+      this.parts += 220;
+      this.setStatus('追加建材を確保');
     }
+  }
+
+  isUpgradeUnlocked(id: UpgradeId): boolean {
+    if (id === 'ammoSaver' || id === 'specialist') {
+      return this.wave.wave >= 1;
+    }
+
+    if (id === 'droneOps') {
+      return this.wave.wave >= 5;
+    }
+
+    return true;
   }
 
   setStatus(message: string, durationMs = 2200): void {
@@ -1667,7 +1799,10 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
-    const selectedText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 48, '', 14, '#e6eef4');
+    const objectiveText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 9, '', 13, '#c8f3d6', true);
+    objectiveText.setWordWrapWidth(WORLD_VIEW_WIDTH - 340);
+    objectiveText.setLineSpacing(0);
+    const selectedText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 50, '', 14, '#e6eef4');
     selectedText.setWordWrapWidth(WORLD_VIEW_WIDTH - 340);
     selectedText.setLineSpacing(1);
     const statusText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 88, this.statusMessage, 12, '#fff0c4');
@@ -1676,12 +1811,14 @@ export class GameScene extends Phaser.Scene {
 
     this.ui = {
       wave: this.addText(24, 36, '', 21, '#fff3cc', true),
-      phase: this.addText(24, 70, '', 18, '#e6eef4'),
-      core: this.addText(24, 108, '', 18, '#7fdcff'),
-      parts: this.addText(24, 142, '', 17, '#d6e3eb'),
-      ore: this.addText(24, 172, '', 15, '#d6e3eb'),
-      ammo: this.addText(24, 198, '', 13, '#ffb174'),
-      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 24, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  M:移設  X:解体', 14, '#fff3cc', true),
+      stage: this.addText(24, 66, '', 13, '#c8f3d6', true),
+      phase: this.addText(24, 88, '', 16, '#e6eef4'),
+      core: this.addText(24, 116, '', 18, '#7fdcff'),
+      parts: this.addText(24, 146, '', 17, '#d6e3eb'),
+      ore: this.addText(24, 174, '', 15, '#d6e3eb'),
+      ammo: this.addText(24, 200, '', 13, '#ffb174'),
+      objective: objectiveText,
+      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  M:移設  X:解体', 14, '#fff3cc', true),
       selected: selectedText,
       status: statusText,
       readyButton,
@@ -1710,6 +1847,10 @@ export class GameScene extends Phaser.Scene {
     for (const group of BUILD_GROUPS) {
       const y = yCursor;
       const expanded = this.expandedBuildGroups.has(group.id);
+      const unlockedCount = group.optionIds.filter((optionId) => {
+        const option = BUILD_OPTION_BY_ID.get(optionId);
+        return option ? this.isBuildOptionUnlocked(option) : false;
+      }).length;
       const headerBox = this.trackBuildMenuObject(
           this.add
           .rectangle(118, y, 198, BUILD_MENU_HEADER_HEIGHT, 0x202a33, 1)
@@ -1725,7 +1866,9 @@ export class GameScene extends Phaser.Scene {
         ),
       );
       this.trackBuildMenuObject(
-        this.sharpenBuildMenuText(this.addText(198, y - 9, `${group.optionIds.length}`, 12, '#9fb3c3', true)),
+        this.sharpenBuildMenuText(
+          this.addText(184, y - 9, `${unlockedCount}/${group.optionIds.length}`, 12, '#9fb3c3', true),
+        ),
       );
 
       headerBox.on(
@@ -1763,23 +1906,43 @@ export class GameScene extends Phaser.Scene {
           BUILD_MENU_CARD_HEIGHT / 2;
         const optionX = BUILD_MENU_CARD_COLUMNS[column];
         const cost = this.buildOptionCost(option);
+        const unlocked = this.isBuildOptionUnlocked(option);
         const box = this.trackBuildMenuObject(
           this.add
-            .rectangle(optionX, optionY, BUILD_MENU_CARD_WIDTH, BUILD_MENU_CARD_HEIGHT, 0x151a20, 1)
+            .rectangle(
+              optionX,
+              optionY,
+              BUILD_MENU_CARD_WIDTH,
+              BUILD_MENU_CARD_HEIGHT,
+              unlocked ? 0x151a20 : 0x11161c,
+              1,
+            )
             .setOrigin(0.5)
-            .setStrokeStyle(2, this.isBuildOptionSelected(option) ? 0xffd16a : 0x55606a, 1)
+            .setStrokeStyle(
+              2,
+              unlocked
+                ? this.isBuildOptionSelected(option)
+                  ? 0xffd16a
+                  : 0x55606a
+                : 0x3f4750,
+              1,
+            )
             .setDepth(100)
             .setInteractive({ useHandCursor: true }),
         );
-        this.trackBuildMenuObject(
-          this.add.sprite(optionX, optionY - 18, option.iconKey).setDisplaySize(30, 30).setDepth(101),
+        const icon = this.trackBuildMenuObject(
+          this.add
+            .sprite(optionX, optionY - 18, option.iconKey)
+            .setDisplaySize(30, 30)
+            .setDepth(101),
         );
+        icon.setAlpha(unlocked ? 1 : 0.3);
         const labelSize = option.label.length >= 7 ? 9 : option.label.length >= 6 ? 10 : 11;
         const labelText = this.add
           .text(optionX, optionY + 1, option.label, {
             fontFamily: '"Yu Gothic", Meiryo, sans-serif',
             fontSize: `${labelSize}px`,
-            color: '#f4f0df',
+            color: unlocked ? '#f4f0df' : '#798691',
             fontStyle: 'bold',
             align: 'center',
             stroke: '#05070a',
@@ -1793,13 +1956,14 @@ export class GameScene extends Phaser.Scene {
           .text(optionX, optionY + 22, `建材 ${cost}`, {
             fontFamily: '"Yu Gothic", Meiryo, sans-serif',
             fontSize: '12px',
-            color: '#ffd16a',
+            color: unlocked ? '#ffd16a' : '#9fb3c3',
             fontStyle: 'bold',
             stroke: '#05070a',
             strokeThickness: 1,
           })
           .setOrigin(0.5, 0)
           .setDepth(101);
+        costText.setText(unlocked ? `建材 ${cost}` : this.buildUnlockLabel(option));
         this.sharpenBuildMenuText(costText, true);
         this.trackBuildMenuObject(labelText);
         this.trackBuildMenuObject(costText);
@@ -1817,8 +1981,8 @@ export class GameScene extends Phaser.Scene {
             this.selectBuildOption(option);
           },
         );
-        box.on('pointerover', () => box.setFillStyle(0x22303a, 1));
-        box.on('pointerout', () => box.setFillStyle(0x151a20, 1));
+        box.on('pointerover', () => box.setFillStyle(unlocked ? 0x22303a : 0x18202a, 1));
+        box.on('pointerout', () => box.setFillStyle(unlocked ? 0x151a20 : 0x11161c, 1));
 
         this.buildButtons.push({ option, box });
       });
@@ -1867,6 +2031,55 @@ export class GameScene extends Phaser.Scene {
     this.createBuildMenu();
   }
 
+  private currentStage(): StageDefinition {
+    return (
+      [...STAGE_DEFS]
+        .reverse()
+        .find((stage) => this.wave.wave >= stage.unlockWave) ?? STAGE_DEFS[0]
+    );
+  }
+
+  private stageForUnlockWave(unlockWave: number): StageDefinition {
+    return (
+      STAGE_DEFS.find((stage) => stage.unlockWave === unlockWave) ??
+      [...STAGE_DEFS]
+        .reverse()
+        .find((stage) => unlockWave >= stage.unlockWave) ??
+      STAGE_DEFS[0]
+    );
+  }
+
+  private unlockWaveForOption(option: BuildOption): number {
+    return BUILD_OPTION_UNLOCK_WAVES[option.id] ?? 0;
+  }
+
+  private isBuildOptionUnlocked(option: BuildOption): boolean {
+    return this.wave.wave >= this.unlockWaveForOption(option);
+  }
+
+  private buildUnlockLabel(option: BuildOption): string {
+    return `S${this.stageForUnlockWave(this.unlockWaveForOption(option)).id}解除`;
+  }
+
+  private lockedBuildStatus(option: BuildOption): string {
+    const unlockWave = this.unlockWaveForOption(option);
+    const stage = this.stageForUnlockWave(unlockWave);
+    return `${option.label}は${stage.label}で解禁（ウェーブ${unlockWave}クリア後）`;
+  }
+
+  private selectedBuildOption(): BuildOption | undefined {
+    return BUILD_OPTIONS.find(
+      (option) =>
+        option.type === this.selectedBuild &&
+        (option.conveyorVariant ?? 'straight') === this.selectedConveyorVariant,
+    );
+  }
+
+  private isSelectedBuildUnlocked(): boolean {
+    const option = this.selectedBuildOption();
+    return !option || this.isBuildOptionUnlocked(option);
+  }
+
   private updateTurrets(time: number): void {
     const turrets = this.factory
       .getBuildings()
@@ -1897,23 +2110,29 @@ export class GameScene extends Phaser.Scene {
       }
 
       turret.nextFireAt = time + 560 * config.fireIntervalMultiplier;
-      turret.removeStored(config.ammo);
+      if (Math.random() >= this.modifiers.ammoSaveChance) {
+        turret.removeStored(config.ammo);
+      }
       turret.flash(0xffe0a3);
       this.playWeaponShotSound(turret.type);
       const bullet = this.bullets.find((candidate) => !candidate.active) ?? this.addBullet();
       const position = turret.getWorldPosition();
+      const damage =
+        this.modifiers.turretDamage *
+        config.damageMultiplier *
+        this.weaponDamageMultiplier(turret.type);
       bullet.fire(
         position.x,
         position.y,
         target,
-        this.modifiers.turretDamage * config.damageMultiplier,
+        damage,
         config.color,
         config.radius || config.stunMs
           ? (_target, hitPosition) => {
               this.affectEnemiesArea(
                 hitPosition,
                 config.radius ?? 20,
-                this.modifiers.turretDamage * config.damageMultiplier,
+                damage,
                 config.stunMs ?? 0,
                 config.color,
                 config.areaEffect,
@@ -1959,7 +2178,13 @@ export class GameScene extends Phaser.Scene {
         (x, y, target) => {
           const bullet = this.bullets.find((candidate) => !candidate.active) ?? this.addBullet();
           this.playWeaponShotSound('combatDrone');
-          bullet.fire(x, y, target, this.modifiers.turretDamage * 0.45, 0x9de8ff);
+          bullet.fire(
+            x,
+            y,
+            target,
+            this.modifiers.turretDamage * 0.45 * this.modifiers.droneDamageMultiplier,
+            0x9de8ff,
+          );
         },
       );
     }
@@ -2028,6 +2253,14 @@ export class GameScene extends Phaser.Scene {
 
     const cell = this.pointerToCell(pointer);
     if (!cell) {
+      return false;
+    }
+
+    if (!this.isSelectedBuildUnlocked()) {
+      if (!continuous) {
+        const option = this.selectedBuildOption();
+        this.setStatus(option ? this.lockedBuildStatus(option) : 'まだ建設できません');
+      }
       return false;
     }
 
@@ -2377,15 +2610,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   private selectBuildOption(option: BuildOption): void {
+    if (!this.isBuildOptionUnlocked(option)) {
+      this.setStatus(this.lockedBuildStatus(option), 2600);
+      return;
+    }
+
     this.selectedBuild = option.type;
     this.selectedConveyorVariant = option.conveyorVariant ?? 'straight';
     this.stopConveyorPainting();
     this.setMode('build', false);
     this.setStatus(`${option.label}を選択`, 900);
     this.buildButtons.forEach(({ option: buttonOption, box }) => {
+      const unlocked = this.isBuildOptionUnlocked(buttonOption);
       box.setStrokeStyle(
         2,
-        this.isBuildOptionSelected(buttonOption) ? 0xffd16a : 0x55606a,
+        unlocked
+          ? this.isBuildOptionSelected(buttonOption)
+            ? 0xffd16a
+            : 0x55606a
+          : 0x3f4750,
         1,
       );
     });
@@ -2456,6 +2699,10 @@ export class GameScene extends Phaser.Scene {
     return Object.prototype.hasOwnProperty.call(WEAPON_CONFIGS, type);
   }
 
+  private weaponDamageMultiplier(type: WeaponBuildingType): number {
+    return type === 'turret' ? 1 : this.modifiers.specialDamageMultiplier;
+  }
+
   private weaponRange(type: WeaponBuildingType): number {
     return this.modifiers.turretRange * WEAPON_CONFIGS[type].rangeMultiplier;
   }
@@ -2521,6 +2768,154 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
+  private hoverDiagnostic(): string {
+    const pointer = this.input.activePointer;
+    if (!pointer || !this.isPointerInWorldView(pointer)) {
+      return '';
+    }
+
+    const cell = this.pointerToCell(pointer);
+    if (!cell) {
+      return '';
+    }
+
+    const building = this.grid.getBuilding(cell);
+    if (!building) {
+      const resource = this.grid.getResource(cell);
+      if (!resource) {
+        return '';
+      }
+
+      return `診断: ${ITEM_DEFS[this.itemForResource(resource)].label}鉱床。採掘機を置くと資源を取り出せます`;
+    }
+
+    return `診断: ${BUILDING_DEFS[building.type].label} - ${this.diagnoseBuilding(building)}`;
+  }
+
+  private diagnoseBuilding(building: Building): string {
+    if (!building.alive) {
+      return '破壊されています。一括修理で復旧できます';
+    }
+
+    if (building.type === 'core') {
+      return '防衛対象です。敵が到達するとHPが減ります';
+    }
+
+    if (this.isWeaponBuilding(building.type)) {
+      const ammo = WEAPON_CONFIGS[building.type].ammo;
+      const stored = building.stored(ammo);
+      return stored > 0
+        ? `${ITEM_DEFS[ammo].label}${stored}。射程内に敵が来ると消費して攻撃します`
+        : `${ITEM_DEFS[ammo].label}待ち。対応する工場から搬送してください`;
+    }
+
+    if (building.type === 'droneTower') {
+      const stored = building.stored('drone');
+      return stored > 0
+        ? `ドローン${stored}。戦闘中に近い敵へ発進します`
+        : 'ドローン待ち。ドローン工場から搬送してください';
+    }
+
+    if (building.type === 'wall') {
+      return `耐久 ${building.hp}/${building.maxHp}。敵を足止めします`;
+    }
+
+    if (building.type === 'conveyor') {
+      if (!building.item) {
+        return '空き。入口と出口の向きが合うと物資が流れます';
+      }
+
+      if (this.time.now >= building.nextMoveAt) {
+        return `${ITEM_DEFS[building.item].label}が停止中。出口側の向き、満杯、受け取り品目を確認`;
+      }
+
+      return `${ITEM_DEFS[building.item].label}を搬送中`;
+    }
+
+    if (building.type === 'miner') {
+      const resource = this.grid.getResource(building.cell);
+      if (!resource) {
+        return '鉱床がありません。資源マスへ移設してください';
+      }
+
+      const item = this.itemForResource(resource);
+      const capacity = storageCapacity(building.type, item);
+      if (building.stored(item) >= capacity) {
+        return `${ITEM_DEFS[item].label}が満杯。${this.outputDiagnostic(building, item)}`;
+      }
+
+      return `${ITEM_DEFS[item].label}を採掘中。${this.outputDiagnostic(building, item)}`;
+    }
+
+    const productItems = BUILDING_PRODUCT_ITEMS[building.type] ?? [];
+    const blockedProduct = productItems.find(
+      (item) => building.stored(item) > 0 && !this.canOutputToDirection(building, item),
+    );
+    if (blockedProduct) {
+      return `${ITEM_DEFS[blockedProduct].label}を出荷待ち。${this.outputDiagnostic(building, blockedProduct)}`;
+    }
+
+    const fullItem = building
+      .storedItems()
+      .find((item) => building.stored(item) >= storageCapacity(building.type, item));
+    if (fullItem) {
+      return `${ITEM_DEFS[fullItem].label}が満杯。搬送先かレシピを確認`;
+    }
+
+    return BUILDING_INPUT_HINTS[building.type] ?? '稼働中';
+  }
+
+  private outputDiagnostic(building: Building, item: ItemType): string {
+    const targetCell = neighbor(building.cell, building.direction);
+    if (!this.grid.inBounds(targetCell)) {
+      return '出力先がマップ外です';
+    }
+
+    const target = this.grid.getBuilding(targetCell);
+    if (!target?.alive) {
+      return '出力先に施設がありません';
+    }
+
+    if (target.type === 'conveyor') {
+      if (target.item) {
+        return '搬送先コンベアが満杯です';
+      }
+
+      if (target.conveyorVariant === 'undergroundOutput') {
+        return '地下出口は通常入力を受け取れません';
+      }
+
+      return '出力先は空いています';
+    }
+
+    const capacity = storageCapacity(target.type, item);
+    if (capacity <= 0) {
+      return `${BUILDING_DEFS[target.type].label}は${ITEM_DEFS[item].label}を受け取れません`;
+    }
+
+    if (target.stored(item) >= capacity) {
+      return `${BUILDING_DEFS[target.type].label}の${ITEM_DEFS[item].label}が満杯です`;
+    }
+
+    return '出力先は空いています';
+  }
+
+  private canOutputToDirection(building: Building, item: ItemType): boolean {
+    return this.outputDiagnostic(building, item) === '出力先は空いています';
+  }
+
+  private itemForResource(resource: ResourceKind): ItemType {
+    if (resource === 'copper') {
+      return 'copperOre';
+    }
+
+    if (resource === 'oil') {
+      return 'oil';
+    }
+
+    return 'ironOre';
+  }
+
   private updatePreview(): void {
     this.preview.clear();
     if (this.gameEnded || this.wave.state === 'upgrade') {
@@ -2570,6 +2965,7 @@ export class GameScene extends Phaser.Scene {
       const replacementValid =
         existing.type !== 'core' &&
         this.wave.state === 'preparation' &&
+        this.isSelectedBuildUnlocked() &&
         this.grid.isBuildable(cell) &&
         (this.selectedBuild !== 'miner' || Boolean(this.grid.getResource(cell))) &&
         this.parts + refund >= this.buildCost(this.selectedBuild, this.selectedConveyorVariant);
@@ -2600,6 +2996,7 @@ export class GameScene extends Phaser.Scene {
 
     const valid =
       this.wave.state === 'preparation' &&
+      this.isSelectedBuildUnlocked() &&
       this.grid.isBuildable(cell) &&
       (this.selectedBuild !== 'miner' || Boolean(this.grid.getResource(cell))) &&
       this.parts >= this.buildCost(this.selectedBuild, this.selectedConveyorVariant);
@@ -2627,9 +3024,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateUi(time: number): void {
+    const stage = this.currentStage();
     this.ui.wave.setText(
       `ウェーブ ${Math.min(this.wave.wave + 1, this.wave.maxWave)}/${this.wave.maxWave}`,
     );
+    this.ui.stage.setText(stage.label);
     const phaseText =
       this.wave.state === 'preparation'
         ? '準備フェーズ'
@@ -2639,6 +3038,7 @@ export class GameScene extends Phaser.Scene {
             ? '強化選択中'
             : '完了';
     this.ui.phase.setText(phaseText);
+    this.ui.objective.setText(`目標: ${stage.objective}`);
     this.ui.core.setText(`コアHP ${this.core.hp}/${this.core.maxHp}`);
     this.ui.parts.setText(`建材 ${Math.floor(this.parts)}`);
     this.ui.ore.setText(
@@ -2681,8 +3081,11 @@ export class GameScene extends Phaser.Scene {
 
     if (this.statusUntil > 0 && time > this.statusUntil) {
       this.statusMessage = '';
-      this.ui.status.setText('');
       this.statusUntil = 0;
+    }
+
+    if (this.statusUntil <= 0) {
+      this.ui.status.setText(this.hoverDiagnostic());
     }
   }
 

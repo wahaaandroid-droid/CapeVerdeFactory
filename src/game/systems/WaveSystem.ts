@@ -70,16 +70,18 @@ export class WaveSystem {
     }
 
     this.state = 'upgrade';
-    this.scene.setStatus(`ウェーブ${this.wave}クリア。強化を選択`);
+    this.scene.onWaveCleared(this.wave);
     this.scene.upgrades.show();
   }
 
   private buildWave(wave: number): EnemyType[] {
-    const total = 5 + wave * 2;
+    const total = 4 + wave * 2;
     const enemies: EnemyType[] = [];
 
     for (let i = 0; i < total; i += 1) {
-      if (wave >= 5 && i % 6 === 4) {
+      if (wave >= 8 && i % 5 === 0) {
+        enemies.push('heavy');
+      } else if (wave >= 5 && i % 6 === 4) {
         enemies.push('suicide');
       } else if (wave >= 3 && i % 4 === 2) {
         enemies.push('heavy');
