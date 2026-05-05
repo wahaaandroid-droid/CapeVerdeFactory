@@ -4,10 +4,11 @@ import { Enemy } from './Enemy';
 export class Bullet {
   active = false;
   private target: Enemy | null = null;
+  private targetPosition: Phaser.Math.Vector2 | null = null;
   private damage = 0;
   private speed = 360;
   private color = 0xffcf65;
-  private onHit: ((target: Enemy, position: Phaser.Math.Vector2) => void) | null = null;
+  private onHit: ((target: Enemy | null, position: Phaser.Math.Vector2) => void) | null = null;
   private readonly body: Phaser.GameObjects.Rectangle;
 
   constructor(private readonly scene: Phaser.Scene) {
@@ -28,10 +29,11 @@ export class Bullet {
     target: Enemy,
     damage: number,
     color = 0xffcf65,
-    onHit: ((target: Enemy, position: Phaser.Math.Vector2) => void) | null = null,
+    onHit: ((target: Enemy | null, position: Phaser.Math.Vector2) => void) | null = null,
   ): void {
     this.active = true;
     this.target = target;
+    this.targetPosition = target.getWorldPosition();
     this.damage = damage;
     this.color = color;
     this.onHit = onHit;
@@ -43,35 +45,45 @@ export class Bullet {
   }
 
   update(delta: number): boolean {
-    if (!this.active || !this.target?.active) {
+    if (!this.active) {
       this.deactivate();
       return false;
     }
 
-    const targetPosition = this.target.getWorldPosition();
+    if (this.target?.active) {
+      this.targetPosition = this.target.getWorldPosition();
+    }
+
+    if (!this.targetPosition) {
+      this.deactivate();
+      return false;
+    }
+
     const angle = Phaser.Math.Angle.Between(
       this.body.x,
       this.body.y,
-      targetPosition.x,
-      targetPosition.y,
+      this.targetPosition.x,
+      this.targetPosition.y,
     );
     this.body.rotation = angle;
 
     const distance = Phaser.Math.Distance.Between(
       this.body.x,
       this.body.y,
-      targetPosition.x,
-      targetPosition.y,
+      this.targetPosition.x,
+      this.targetPosition.y,
     );
     const step = (this.speed * delta) / 1000;
 
     if (distance <= step + 4) {
+      const hitTarget = this.target?.active ? this.target : null;
+      const hitPosition = this.targetPosition.clone();
       if (this.onHit) {
-        this.onHit(this.target, targetPosition);
-      } else {
-        this.target.damage(this.damage);
+        this.onHit(hitTarget, hitPosition);
+      } else if (hitTarget) {
+        hitTarget.damage(this.damage);
       }
-      this.scene.events.emit('bullet-hit', targetPosition.x, targetPosition.y, this.color);
+      this.scene.events.emit('bullet-hit', hitPosition.x, hitPosition.y, this.color);
       this.deactivate();
       return true;
     }
@@ -84,6 +96,7 @@ export class Bullet {
   deactivate(): void {
     this.active = false;
     this.target = null;
+    this.targetPosition = null;
     this.onHit = null;
     this.body.setActive(false).setVisible(false).setPosition(-100, -100);
   }
