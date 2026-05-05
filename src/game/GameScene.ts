@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import areaExplosionsUrl from '../../assets/images/area-explosions-generated.png';
-import recipeBoardUrl from '../../assets/images/recipe-board-generated.png';
 import generatedConveyorsUrl from '../../assets/sprites/generated-conveyors.png';
 import generatedSpritesUrl from '../../assets/sprites/generated-sprites.png';
 import { Bullet } from './entities/Bullet';
@@ -59,6 +58,19 @@ interface BuildGroupDefinition {
   id: BuildGroupId;
   label: string;
   optionIds: string[];
+}
+
+interface RecipeGuideCard {
+  title: string;
+  subtitle: string;
+  body: string;
+  icons: string[];
+  accent: number;
+}
+
+interface RecipeGuidePage {
+  title: string;
+  cards: RecipeGuideCard[];
 }
 
 const BUILD_OPTIONS: BuildOption[] = [
@@ -244,84 +256,132 @@ const BUILD_MENU_START_Y = 306;
 const BUILD_MENU_HEADER_HEIGHT = 30;
 const BUILD_MENU_CARD_HEIGHT = 52;
 const BUILD_MENU_GAP = 8;
+const BUILD_MENU_AFTER_EXPANDED_GAP = 20;
 const BUILD_MENU_CARD_WIDTH = 88;
 const BUILD_MENU_CARD_COLUMNS = [72, 166];
 
-const RECIPE_ROWS = [
+const RECIPE_GUIDE_PAGES: RecipeGuidePage[] = [
   {
-    building: '採掘機',
-    output: '鉄 / 銅 / 原油',
-    recipe: '資源マスから採掘し、向きの方向へ排出',
+    title: '資源と加工ライン',
+    cards: [
+      {
+        title: '鉄鉱床 + 採掘機',
+        subtitle: '鉄を掘る',
+        body: '鉄の資源マスに採掘機を置くと、向きの方向へ鉄を排出します。',
+        icons: ['tile-resource', 'building-miner', 'item-ironOre'],
+        accent: 0xc7d4dc,
+      },
+      {
+        title: '銅鉱床 + 採掘機',
+        subtitle: '銅を掘る',
+        body: '銅の資源マスから銅を採掘し、銅板やワイヤーの材料にします。',
+        icons: ['tile-resourceCopper', 'building-miner', 'item-copperOre'],
+        accent: 0xd7863f,
+      },
+      {
+        title: '原油マス + 採掘機',
+        subtitle: '原油を掘る',
+        body: '黒い原油マスから原油を採掘し、プラスチックや燃料に加工します。',
+        icons: ['tile-resourceOil', 'building-miner', 'item-oil'],
+        accent: 0x7a7dff,
+      },
+      {
+        title: '搬送ライン',
+        subtitle: '物資を運ぶ',
+        body: '直進、T字、十字コンベアで施設間を接続します。分岐は流れから自動判定します。',
+        icons: ['building-conveyor', 'conveyor-junctionThree', 'conveyor-junctionFour'],
+        accent: 0xf3c53c,
+      },
+      {
+        title: '弾薬工場',
+        subtitle: '鉄 -> 弾',
+        body: '施設内に鉄が入ると通常弾を作ります。弾はタレットへ搬送してください。',
+        icons: ['building-ammoFactory', 'item-ironOre', 'item-ammo'],
+        accent: 0xff8d3f,
+      },
+      {
+        title: '金属板工場',
+        subtitle: '鉄/銅 -> 板',
+        body: '鉄から鉄板、銅から銅板を作ります。特殊弾や大型生産の基本材料です。',
+        icons: ['building-metalPlateFactory', 'item-ironPlate', 'item-copperPlate'],
+        accent: 0xd5e2ea,
+      },
+      {
+        title: 'ワイヤー工場',
+        subtitle: '銅 -> ワイヤー',
+        body: '銅をワイヤーに加工します。EMP弾、ミサイル、ドローンの材料になります。',
+        icons: ['building-wireFactory', 'item-copperOre', 'item-wire'],
+        accent: 0xf4b552,
+      },
+      {
+        title: '化学工場',
+        subtitle: '原油 -> 樹脂/燃料',
+        body: 'プラスチック工場は樹脂、燃料工場は燃料を作ります。',
+        icons: ['building-plasticFactory', 'building-fuelFactory', 'item-plastic', 'item-fuel'],
+        accent: 0x9de8ff,
+      },
+    ],
   },
   {
-    building: '弾薬工場',
-    output: '弾',
-    recipe: '鉄 1 -> 弾 1',
-  },
-  {
-    building: '金属板工場',
-    output: '鉄板 / 銅板',
-    recipe: '鉄 1 -> 鉄板 1 / 銅 1 -> 銅板 1',
-  },
-  {
-    building: 'ワイヤー工場',
-    output: 'ワイヤー',
-    recipe: '銅 1 -> ワイヤー 1',
-  },
-  {
-    building: 'プラスチック工場',
-    output: 'プラスチック',
-    recipe: '原油 1 -> プラスチック 1',
-  },
-  {
-    building: '燃料工場',
-    output: '燃料',
-    recipe: '原油 1 -> 燃料 1',
-  },
-  {
-    building: '特殊弾工場',
-    output: '強化弾 / 焼夷弾 / EMP弾',
-    recipe: '鉄板+銅板 / 鉄板+燃料 / 線+樹脂',
-  },
-  {
-    building: 'ミサイル工場',
-    output: 'ミサイル',
-    recipe: '鉄板 2 + 線 2 + 燃料 4 -> ミサイル',
-  },
-  {
-    building: 'ドローン工場',
-    output: 'ドローン',
-    recipe: '鉄板 5 + 線 5 + 樹脂 5 -> ドローン',
-  },
-  {
-    building: 'タレット',
-    output: '通常射撃',
-    recipe: '弾を消費して近距離を連射',
-  },
-  {
-    building: 'スナイパー',
-    output: '長射程射撃',
-    recipe: '強化弾のみ使用。高威力だが低速',
-  },
-  {
-    building: '大型砲台',
-    output: '範囲爆撃',
-    recipe: '焼夷弾のみ使用。着弾地点を範囲攻撃',
-  },
-  {
-    building: '電磁砲台',
-    output: 'EMP停止',
-    recipe: 'EMP弾のみ使用。範囲内の敵を3秒停止',
-  },
-  {
-    building: 'ミサイル砲台',
-    output: '超長射程爆撃',
-    recipe: 'ミサイルのみ使用。高威力の範囲攻撃',
-  },
-  {
-    building: 'ドローン司令塔',
-    output: '戦闘ドローン',
-    recipe: 'ドローンを消費して追撃ユニットを発進',
+    title: '特殊生産と防衛兵器',
+    cards: [
+      {
+        title: '特殊弾工場',
+        subtitle: '強化/焼夷/EMP弾',
+        body: '鉄板+銅板で強化弾、鉄板+燃料で焼夷弾、ワイヤー+樹脂でEMP弾を作ります。',
+        icons: ['building-specialAmmoFactory', 'item-enhancedAmmo', 'item-incendiaryAmmo', 'item-empAmmo'],
+        accent: 0xffcf65,
+      },
+      {
+        title: 'ミサイル工場',
+        subtitle: '鉄板2+線2+燃料4',
+        body: '素材をまとめてミサイルにします。ミサイル砲台専用の弾薬です。',
+        icons: ['building-missileFactory', 'item-ironPlate', 'item-wire', 'item-missile'],
+        accent: 0xfff0a6,
+      },
+      {
+        title: 'ドローン工場',
+        subtitle: '板5+線5+樹脂5',
+        body: 'ドローンを製造します。完成品だけがドローン司令塔へ出荷されます。',
+        icons: ['building-droneFactory', 'item-ironPlate', 'item-wire', 'item-drone'],
+        accent: 0x9de8ff,
+      },
+      {
+        title: 'タレット',
+        subtitle: '通常弾',
+        body: '弾を消費して近距離の敵を連射します。序盤防衛の基本です。',
+        icons: ['building-turret', 'item-ammo'],
+        accent: 0xffcf65,
+      },
+      {
+        title: 'スナイパー',
+        subtitle: '強化弾',
+        body: '強化弾のみ使用。通常タレットの3倍射程、3倍威力、低速射撃です。',
+        icons: ['building-sniperTurret', 'item-enhancedAmmo'],
+        accent: 0xffe073,
+      },
+      {
+        title: '大型砲台 / 電磁砲台',
+        subtitle: '焼夷弾 / EMP弾',
+        body: '大型砲台は範囲ダメージ、電磁砲台は範囲内の敵を3秒停止します。',
+        icons: ['building-cannonTurret', 'building-empTurret', 'item-incendiaryAmmo', 'item-empAmmo'],
+        accent: 0x68d7ff,
+      },
+      {
+        title: 'ミサイル砲台',
+        subtitle: 'ミサイル',
+        body: '超長射程かつ高威力の範囲攻撃。発射間隔はかなり長めです。',
+        icons: ['building-missileTurret', 'item-missile'],
+        accent: 0xff8d3f,
+      },
+      {
+        title: 'ドローン司令塔',
+        subtitle: 'ドローン',
+        body: 'ドローンを発進させ、一番近い敵へ向かわせます。飛行中も射撃します。',
+        icons: ['building-droneTower', 'item-drone'],
+        accent: 0x9de8ff,
+      },
+    ],
   },
 ];
 
@@ -424,6 +484,7 @@ export class GameScene extends Phaser.Scene {
   private readonly buildMenuObjects: Phaser.GameObjects.GameObject[] = [];
   private readonly expandedBuildGroups = new Set<BuildGroupId>();
   private recipeOverlay?: Phaser.GameObjects.Container;
+  private recipePage = 0;
   private worldCamera!: Phaser.Cameras.Scene2D.Camera;
   private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private readonly worldObjects = new Set<Phaser.GameObjects.GameObject>();
@@ -472,7 +533,6 @@ export class GameScene extends Phaser.Scene {
       frameHeight: 128,
     });
     this.load.image('area-explosions-generated', areaExplosionsUrl);
-    this.load.image('recipe-board-generated', recipeBoardUrl);
   }
 
   create(): void {
@@ -1314,10 +1374,12 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
-    const selectedText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 50, '', 14, '#e6eef4');
+    const selectedText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 48, '', 14, '#e6eef4');
     selectedText.setWordWrapWidth(WORLD_VIEW_WIDTH - 340);
-    const statusText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 80, this.statusMessage, 13, '#fff0c4');
+    selectedText.setLineSpacing(1);
+    const statusText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 88, this.statusMessage, 12, '#fff0c4');
     statusText.setWordWrapWidth(WORLD_VIEW_WIDTH - 340);
+    statusText.setLineSpacing(0);
 
     this.ui = {
       wave: this.addText(24, 36, '', 21, '#fff3cc', true),
@@ -1326,7 +1388,7 @@ export class GameScene extends Phaser.Scene {
       parts: this.addText(24, 142, '', 17, '#d6e3eb'),
       ore: this.addText(24, 172, '', 15, '#d6e3eb'),
       ammo: this.addText(24, 198, '', 13, '#ffb174'),
-      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 28, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  M:移設  X:解体', 14, '#fff3cc', true),
+      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 24, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  M:移設  X:解体', 14, '#fff3cc', true),
       selected: selectedText,
       status: statusText,
       readyButton,
@@ -1344,7 +1406,7 @@ export class GameScene extends Phaser.Scene {
     this.drawPanel(8, 260, 224, 492, '建設メニュー');
     this.createBuildMenu();
 
-    this.drawPanel(WORLD_VIEW_X, lowerPanelY, WORLD_VIEW_WIDTH, 96, '操作ライン');
+    this.drawPanel(WORLD_VIEW_X, lowerPanelY, WORLD_VIEW_WIDTH, 102, '操作ライン');
     this.updateUi(this.time.now);
   }
 
@@ -1461,7 +1523,8 @@ export class GameScene extends Phaser.Scene {
 
       yCursor +=
         Math.ceil(group.optionIds.length / BUILD_MENU_CARD_COLUMNS.length) *
-          (BUILD_MENU_CARD_HEIGHT + BUILD_MENU_GAP);
+          (BUILD_MENU_CARD_HEIGHT + BUILD_MENU_GAP) +
+        BUILD_MENU_AFTER_EXPANDED_GAP;
     }
   }
 
@@ -2124,7 +2187,8 @@ export class GameScene extends Phaser.Scene {
       .setStrokeStyle(2, this.mode === 'demolish' ? 0xffd16a : 0xffa35c, 1);
 
     if (this.statusUntil > 0 && time > this.statusUntil) {
-      this.ui.status.setText('鉄を弾薬工場へ、弾をタレットへ実搬送する');
+      this.statusMessage = '';
+      this.ui.status.setText('');
       this.statusUntil = 0;
     }
   }
@@ -2157,6 +2221,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.recipePage = 0;
     this.showRecipeOverlay();
   }
 
@@ -2165,132 +2230,83 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    const page = RECIPE_GUIDE_PAGES[this.recipePage] ?? RECIPE_GUIDE_PAGES[0];
     const container = this.add.container(0, 0).setDepth(245);
     const shade = this.add
       .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x02050a, 0.78)
       .setOrigin(0)
       .setInteractive({ useHandCursor: true });
-    const board = this.add
-      .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'recipe-board-generated')
-      .setDisplaySize(1030, 630)
-      .setAlpha(0.98)
-      .setInteractive({ useHandCursor: true });
     const fallbackPanel = this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1010, 600, 0x101820, 0.55)
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1038, 632, 0x101820, 0.96)
       .setStrokeStyle(2, 0xd9a85f, 0.95)
       .setInteractive({ useHandCursor: true });
     const title = this.add
-      .text(GAME_WIDTH / 2, 88, 'レシピ一覧', {
+      .text(GAME_WIDTH / 2, 72, page.title, {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '32px',
+        fontSize: '31px',
         color: '#fff3cc',
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
     const closeHint = this.add
-      .text(GAME_WIDTH / 2, 122, 'クリックで閉じる', {
+      .text(GAME_WIDTH / 2, 110, `レシピ一覧 ${this.recipePage + 1}/${RECIPE_GUIDE_PAGES.length}`, {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '13px',
+        fontSize: '14px',
         color: '#b7cad8',
+        fontStyle: 'bold',
       })
       .setOrigin(0.5);
-    const tableX = 190;
-    const tableY = 146;
-    const tableWidth = 800;
-    const headerHeight = 34;
-    const rowHeight = 60;
-    const visibleRows = Math.ceil(RECIPE_ROWS.length / 2);
-    const tableHeight = headerHeight + rowHeight * visibleRows;
-    const halfWidth = tableWidth / 2;
-    const buildingColWidth = 112;
-    const tableBg = this.add
-      .rectangle(tableX, tableY, tableWidth, tableHeight, 0x0b1219, 0.9)
-      .setOrigin(0)
-      .setStrokeStyle(2, 0x375162, 0.9)
-      .setInteractive({ useHandCursor: true });
-    const tableGrid = this.add.graphics();
-    tableGrid.lineStyle(1, 0x375162, 0.82);
-    tableGrid.strokeRect(tableX, tableY, tableWidth, tableHeight);
-    tableGrid.lineBetween(tableX, tableY + headerHeight, tableX + tableWidth, tableY + headerHeight);
-    tableGrid.lineBetween(tableX + halfWidth, tableY, tableX + halfWidth, tableY + tableHeight);
-    tableGrid.lineBetween(
-      tableX + buildingColWidth,
-      tableY,
-      tableX + buildingColWidth,
-      tableY + tableHeight,
-    );
-    tableGrid.lineBetween(
-      tableX + halfWidth + buildingColWidth,
-      tableY,
-      tableX + halfWidth + buildingColWidth,
-      tableY + tableHeight,
-    );
-    for (let i = 1; i <= visibleRows; i += 1) {
-      const y = tableY + headerHeight + i * rowHeight;
-      tableGrid.lineBetween(tableX, y, tableX + tableWidth, y);
-    }
-
-    const leftLabelX = tableX + 12;
-    const leftDetailX = tableX + buildingColWidth + 14;
-    const rightLabelX = tableX + halfWidth + 12;
-    const rightDetailX = tableX + halfWidth + buildingColWidth + 14;
-    const detailWidth = halfWidth - buildingColWidth - 28;
-    const headers = [
-      this.add.text(leftLabelX, tableY + 10, '建築物', {
-        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '14px',
-        color: '#7ddcff',
-        fontStyle: 'bold',
-      }),
-      this.add.text(leftDetailX, tableY + 10, 'できること / レシピ', {
-        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '14px',
-        color: '#7ddcff',
-        fontStyle: 'bold',
-      }),
-      this.add.text(rightLabelX, tableY + 10, '建築物', {
-        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '14px',
-        color: '#7ddcff',
-        fontStyle: 'bold',
-      }),
-      this.add.text(rightDetailX, tableY + 10, 'できること / レシピ', {
-        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '14px',
-        color: '#7ddcff',
-        fontStyle: 'bold',
-      }),
-    ];
-
-    const texts: Phaser.GameObjects.Text[] = [];
-    const rightColumnStart = visibleRows;
-    RECIPE_ROWS.forEach((row, index) => {
-      const rightColumn = index >= rightColumnStart;
-      const rowIndex = rightColumn ? index - rightColumnStart : index;
-      const x = rightColumn ? rightLabelX : leftLabelX;
-      const detailX = rightColumn ? rightDetailX : leftDetailX;
-      const y = tableY + headerHeight + 12 + rowIndex * rowHeight;
-      const buildingFontSize = row.building.length >= 6 ? '12px' : '14px';
-      const buildingText = this.add.text(x, y, row.building, {
-        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: buildingFontSize,
-        color: '#fff3cc',
-        fontStyle: 'bold',
-      });
-      const outputText = this.add.text(detailX, y - 2, row.output, {
-        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '13px',
-        color: '#ffcf65',
-        fontStyle: 'bold',
-      });
-      const recipeText = this.add.text(detailX, y + 19, row.recipe, {
-        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
-        fontSize: '12px',
-        color: '#dce8ef',
-        wordWrap: { width: detailWidth },
-      });
-      texts.push(buildingText, outputText, recipeText);
+    const pageObjects: Phaser.GameObjects.GameObject[] = [];
+    page.cards.forEach((card, index) => {
+      const column = index % 2;
+      const row = Math.floor(index / 2);
+      pageObjects.push(
+        ...this.createRecipeGuideCard(
+          115 + column * 500,
+          136 + row * 126,
+          455,
+          110,
+          card,
+        ),
+      );
     });
+
+    const prevButton = this.add
+      .rectangle(GAME_WIDTH / 2 - 108, 714, 160, 34, 0x1f2b34, 1)
+      .setStrokeStyle(2, 0x7ddcff, 0.8)
+      .setInteractive({ useHandCursor: true });
+    const prevText = this.add
+      .text(GAME_WIDTH / 2 - 108, 714, '前ページ', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '16px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    const nextButton = this.add
+      .rectangle(GAME_WIDTH / 2 + 108, 714, 160, 34, 0x1f2b34, 1)
+      .setStrokeStyle(2, 0x7ddcff, 0.8)
+      .setInteractive({ useHandCursor: true });
+    const nextText = this.add
+      .text(GAME_WIDTH / 2 + 108, 714, '次ページ', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '16px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    const closeButton = this.add
+      .rectangle(GAME_WIDTH - 168, 714, 128, 34, 0x35282a, 1)
+      .setStrokeStyle(2, 0xffa35c, 0.9)
+      .setInteractive({ useHandCursor: true });
+    const closeText = this.add
+      .text(GAME_WIDTH - 168, 714, '閉じる', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '16px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
 
     const close = (
       _pointer: Phaser.Input.Pointer,
@@ -2301,24 +2317,107 @@ export class GameScene extends Phaser.Scene {
       event.stopPropagation();
       this.hideRecipeOverlay();
     };
+    const showPage = (direction: number) => (
+      _pointer: Phaser.Input.Pointer,
+      _localX: number,
+      _localY: number,
+      event: Phaser.Types.Input.EventData,
+    ) => {
+      event.stopPropagation();
+      this.recipePage =
+        (this.recipePage + direction + RECIPE_GUIDE_PAGES.length) %
+        RECIPE_GUIDE_PAGES.length;
+      this.hideRecipeOverlay();
+      this.showRecipeOverlay();
+    };
     shade.on('pointerdown', close);
-    board.on('pointerdown', close);
-    fallbackPanel.on('pointerdown', close);
-    tableBg.on('pointerdown', close);
+    fallbackPanel.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => event.stopPropagation(),
+    );
+    prevButton.on('pointerdown', showPage(-1));
+    nextButton.on('pointerdown', showPage(1));
+    closeButton.on('pointerdown', close);
 
     container.add([
       shade,
-      board,
       fallbackPanel,
-      tableBg,
-      tableGrid,
       title,
       closeHint,
-      ...headers,
-      ...texts,
+      ...pageObjects,
+      prevButton,
+      prevText,
+      nextButton,
+      nextText,
+      closeButton,
+      closeText,
     ]);
     this.recipeOverlay = container;
     this.registerUiObject(container);
+  }
+
+  private createRecipeGuideCard(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    card: RecipeGuideCard,
+  ): Phaser.GameObjects.GameObject[] {
+    const objects: Phaser.GameObjects.GameObject[] = [];
+    const bg = this.add
+      .rectangle(x, y, width, height, 0x0b1219, 0.92)
+      .setOrigin(0)
+      .setStrokeStyle(2, card.accent, 0.75);
+    objects.push(bg);
+
+    const iconBaseX = x + 32;
+    const iconY = y + 34;
+    card.icons.forEach((key, index) => {
+      const icon = this.add
+        .sprite(iconBaseX + index * 42, iconY, key)
+        .setDisplaySize(this.recipeIconSize(key), this.recipeIconSize(key));
+      objects.push(icon);
+    });
+
+    const title = this.add.text(x + 188, y + 15, card.title, {
+      fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+      fontSize: '17px',
+      color: '#fff3cc',
+      fontStyle: 'bold',
+    });
+    const subtitle = this.add.text(x + 188, y + 41, card.subtitle, {
+      fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+      fontSize: '14px',
+      color: `#${card.accent.toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold',
+    });
+    const body = this.add.text(x + 188, y + 65, card.body, {
+      fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+      fontSize: '12px',
+      color: '#dce8ef',
+      lineSpacing: 3,
+      wordWrap: { width: width - 204 },
+    });
+    objects.push(title, subtitle, body);
+
+    return objects;
+  }
+
+  private recipeIconSize(key: string): number {
+    if (key.startsWith('tile-')) {
+      return 42;
+    }
+
+    if (key.startsWith('item-')) {
+      return 26;
+    }
+
+    return 36;
   }
 
   private hideRecipeOverlay(): void {
