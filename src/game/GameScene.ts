@@ -766,7 +766,6 @@ export class GameScene extends Phaser.Scene {
     parts: Phaser.GameObjects.Text;
     ore: Phaser.GameObjects.Text;
     ammo: Phaser.GameObjects.Text;
-    objective: Phaser.GameObjects.Text;
     selected: Phaser.GameObjects.Text;
     status: Phaser.GameObjects.Text;
     readyButton: Phaser.GameObjects.Rectangle;
@@ -1924,9 +1923,6 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
-    const objectiveText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 9, '', 13, '#c8f3d6', true);
-    objectiveText.setWordWrapWidth(WORLD_VIEW_WIDTH - 340);
-    objectiveText.setLineSpacing(0);
     const selectedText = this.addText(WORLD_VIEW_X + 26, lowerPanelY + 50, '', 14, '#e6eef4');
     selectedText.setWordWrapWidth(WORLD_VIEW_WIDTH - 340);
     selectedText.setLineSpacing(1);
@@ -1942,7 +1938,6 @@ export class GameScene extends Phaser.Scene {
       parts: this.addText(24, 146, '', 17, '#d6e3eb'),
       ore: this.addText(24, 174, '', 15, '#d6e3eb'),
       ammo: this.addText(24, 200, '', 13, '#ffb174'),
-      objective: objectiveText,
       selected: selectedText,
       status: statusText,
       readyButton,
@@ -3162,7 +3157,6 @@ export class GameScene extends Phaser.Scene {
             ? '強化選択中'
             : '完了';
     this.ui.phase.setText(phaseText);
-    this.ui.objective.setText(`目標: ${stage.objective}`);
     this.ui.core.setText(`コアHP ${this.core.hp}/${this.core.maxHp}`);
     this.ui.parts.setText(`建材 ${Math.floor(this.parts)}`);
     this.ui.ore.setText(
