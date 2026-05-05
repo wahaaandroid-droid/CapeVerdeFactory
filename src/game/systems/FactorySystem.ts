@@ -362,11 +362,7 @@ export class FactorySystem {
     }
 
     const planned = source.getItemOutputDirection();
-    const plannedIndex = planned ? outputs.indexOf(planned) : -1;
-    const candidates =
-      planned && plannedIndex >= 0
-        ? [planned]
-        : this.rotatedOutputDirections(outputs, source.nextOutputIndex);
+    const candidates = this.outputCandidates(outputs, source.nextOutputIndex, planned);
 
     for (const direction of candidates) {
       if (this.outputToDirection(source, item, direction)) {
@@ -377,6 +373,19 @@ export class FactorySystem {
     }
 
     return false;
+  }
+
+  private outputCandidates(
+    outputs: Direction[],
+    startIndex: number,
+    planned: Direction | null,
+  ): Direction[] {
+    const rotated = this.rotatedOutputDirections(outputs, startIndex);
+    if (!planned || !outputs.includes(planned)) {
+      return rotated;
+    }
+
+    return [planned, ...rotated.filter((direction) => direction !== planned)];
   }
 
   private outputDirectionsForItem(
