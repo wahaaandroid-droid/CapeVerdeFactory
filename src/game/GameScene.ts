@@ -493,6 +493,8 @@ export class GameScene extends Phaser.Scene {
   private isPanning = false;
   private spacePanning = false;
   private lastPanPoint: Phaser.Math.Vector2 | null = null;
+  private isConveyorPainting = false;
+  private lastConveyorPaintCell: Cell | null = null;
   private gameEnded = false;
   private statusMessage = '準備フェーズでラインを組み、準備完了で戦闘開始';
   private statusUntil = 0;
@@ -1023,6 +1025,10 @@ export class GameScene extends Phaser.Scene {
         } else if (this.mode === 'demolish') {
           this.tryDemolish(pointer);
         } else {
+          if (this.selectedBuild === 'conveyor') {
+            this.isConveyorPainting = true;
+            this.lastConveyorPaintCell = null;
+          }
           this.tryPlace(pointer);
         }
       }
@@ -1031,10 +1037,23 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (this.isPanning) {
         this.panToPointer(pointer);
+        return;
+      }
+
+      if (
+        this.isConveyorPainting &&
+        pointer.leftButtonDown() &&
+        this.mode === 'build' &&
+        this.selectedBuild === 'conveyor'
+      ) {
+        this.tryPlace(pointer, true);
       }
     });
 
-    this.input.on('pointerup', () => this.stopPan());
+    this.input.on('pointerup', () => {
+      this.stopPan();
+      this.stopConveyorPainting();
+    });
     this.input.on('wheel', (pointer: Phaser.Input.Pointer, _objects: unknown[], _dx: number, dy: number) => {
       if (this.isPointerInWorldView(pointer)) {
         this.zoomAtPointer(pointer, dy);
@@ -1155,6 +1174,11 @@ export class GameScene extends Phaser.Scene {
   private stopPan(): void {
     this.isPanning = false;
     this.lastPanPoint = null;
+  }
+
+  private stopConveyorPainting(): void {
+    this.isConveyorPainting = false;
+    this.lastConveyorPaintCell = null;
   }
 
   private zoomAtPointer(pointer: Phaser.Input.Pointer, wheelDeltaY: number): void {
@@ -1705,40 +1729,78 @@ export class GameScene extends Phaser.Scene {
     return best;
   }
 
-  private tryPlace(pointer: Phaser.Input.Pointer): void {
+  private tryPlace(pointer: Phaser.Input.Pointer, continuous = false): boolean {
     if (this.wave.state !== 'preparation') {
-      this.setStatus('戦闘中は準備できません');
-      return;
+      if (!continuous) {
+        this.setStatus('戦闘中は準備できません');
+      }
+      return false;
     }
 
     const cell = this.pointerToCell(pointer);
     if (!cell) {
-      return;
+      return false;
+    }
+
+    if (
+      continuous &&
+      this.selectedBuild === 'conveyor' &&
+      this.lastConveyorPaintCell &&
+      sameCell(this.lastConveyorPaintCell, cell)
+    ) {
+      return false;
     }
 
     const existing = this.grid.getBuilding(cell);
-    if (existing?.alive) {
-      this.setStatus('そのマスには施設があります');
-      return;
+    if (existing?.alive && existing.type === 'core') {
+      if (!continuous) {
+        this.setStatus('コアは上書きできません');
+      }
+      return false;
+    }
+
+    if (
+      continuous &&
+      existing?.alive &&
+      existing.type === this.selectedBuild &&
+      existing.direction === this.direction &&
+      (existing.type !== 'conveyor' ||
+        existing.conveyorVariant === this.selectedConveyorVariant)
+    ) {
+      this.lastConveyorPaintCell = { ...cell };
+      return false;
     }
 
     if (!this.grid.isBuildable(cell)) {
-      this.setStatus('そこには建設できません');
-      return;
+      if (!continuous) {
+        this.setStatus('そこには建設できません');
+      }
+      return false;
     }
 
     if (this.selectedBuild === 'miner' && !this.grid.getResource(cell)) {
-      this.setStatus('採掘機は鉄/銅/原油ノードに設置');
-      return;
+      if (!continuous) {
+        this.setStatus('採掘機は鉄/銅/原油ノードに設置');
+      }
+      return false;
     }
 
     const cost = this.buildCost(this.selectedBuild, this.selectedConveyorVariant);
-    if (this.parts < cost) {
-      this.setStatus('建材が不足');
-      return;
+    const refund =
+      existing?.alive && existing.type !== 'core'
+        ? this.buildCost(existing.type, existing.conveyorVariant)
+        : 0;
+
+    if (this.parts + refund < cost) {
+      if (!continuous) {
+        this.setStatus('建材が不足');
+      }
+      return false;
     }
 
-    if (existing && !existing.alive) {
+    const replacedLabel = existing?.alive ? BUILDING_DEFS[existing.type].label : '';
+    if (existing) {
+      this.parts += refund;
       this.factory.removeBuilding(existing);
     }
 
@@ -1753,7 +1815,22 @@ export class GameScene extends Phaser.Scene {
       this.selectedBuild === 'conveyor'
         ? `（${CONVEYOR_DEFS[building.conveyorVariant].label}）`
         : '';
-    this.setStatus(`${BUILDING_DEFS[this.selectedBuild].label}${shape}を建設`);
+    this.playBuildSound(this.selectedBuild);
+
+    if (this.selectedBuild === 'conveyor') {
+      this.lastConveyorPaintCell = { ...cell };
+    }
+
+    if (!continuous) {
+      const builtLabel = `${BUILDING_DEFS[this.selectedBuild].label}${shape}`;
+      this.setStatus(
+        refund > 0
+          ? `${replacedLabel}を解体して${builtLabel}を建設（建材${refund}還元）`
+          : `${builtLabel}を建設`,
+      );
+    }
+
+    return true;
   }
 
   private tryRotateHoveredBuilding(): boolean {
@@ -1906,6 +1983,7 @@ export class GameScene extends Phaser.Scene {
   private selectBuildOption(option: BuildOption): void {
     this.selectedBuild = option.type;
     this.selectedConveyorVariant = option.conveyorVariant ?? 'straight';
+    this.stopConveyorPainting();
     this.setMode('build', false);
     this.setStatus(`${option.label}を選択`, 900);
     this.buildButtons.forEach(({ option: buttonOption, box }) => {
@@ -1998,6 +2076,7 @@ export class GameScene extends Phaser.Scene {
 
   private setMode(mode: InteractionMode, announce = true): void {
     this.mode = mode;
+    this.stopConveyorPainting();
     if (mode !== 'move') {
       this.movingBuilding = null;
     }
@@ -2090,16 +2169,33 @@ export class GameScene extends Phaser.Scene {
 
     const existing = this.grid.getBuilding(cell);
     if (existing?.alive) {
-      const canRotate = existing.type !== 'core' && this.wave.state === 'preparation';
-      this.preview.lineStyle(2, canRotate ? 0x7ddcff : 0xff4d3d, 0.95);
+      const refund = existing.type !== 'core' ? this.buildCost(existing.type, existing.conveyorVariant) : 0;
+      const replacementValid =
+        existing.type !== 'core' &&
+        this.wave.state === 'preparation' &&
+        this.grid.isBuildable(cell) &&
+        (this.selectedBuild !== 'miner' || Boolean(this.grid.getResource(cell))) &&
+        this.parts + refund >= this.buildCost(this.selectedBuild, this.selectedConveyorVariant);
+      const centerX = x + TILE_SIZE / 2;
+      const centerY = y + TILE_SIZE / 2;
+      this.preview.lineStyle(2, replacementValid ? 0xffd16a : 0xff4d3d, 0.95);
       this.preview.strokeRect(x + 1, y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
-      if (this.isWeaponBuilding(existing.type)) {
-        this.drawTurretRange(
-          x + TILE_SIZE / 2,
-          y + TILE_SIZE / 2,
-          existing.direction,
-          canRotate,
-          existing.type,
+      if (replacementValid && this.isWeaponBuilding(this.selectedBuild)) {
+        this.drawTurretRange(centerX, centerY, this.direction, true, this.selectedBuild);
+      } else if (this.isWeaponBuilding(existing.type)) {
+        this.drawTurretRange(centerX, centerY, existing.direction, replacementValid, existing.type);
+      }
+
+      if (replacementValid) {
+        this.preview.fillStyle(0xf5c331, 0.75);
+        const angle = Phaser.Math.DegToRad(DIRECTION_ANGLES[this.direction]);
+        this.preview.fillTriangle(
+          centerX + Math.cos(angle) * 10,
+          centerY + Math.sin(angle) * 10,
+          centerX + Math.cos(angle + 2.5) * 8,
+          centerY + Math.sin(angle + 2.5) * 8,
+          centerX + Math.cos(angle - 2.5) * 8,
+          centerY + Math.sin(angle - 2.5) * 8,
         );
       }
       return;
@@ -2519,6 +2615,39 @@ export class GameScene extends Phaser.Scene {
     if (context?.state === 'suspended') {
       void context.resume();
     }
+  }
+
+  private playBuildSound(type: BuildingType): void {
+    const context = this.ensureAudioContext();
+    if (!context) {
+      return;
+    }
+
+    if (context.state === 'suspended') {
+      void context.resume().then(() => this.playBuildSound(type));
+      return;
+    }
+
+    if (type === 'conveyor') {
+      this.playTone(context, 'square', 360, 560, 0.055, 0.055, 'highpass', 500);
+      this.playTone(context, 'triangle', 680, 420, 0.05, 0.035, 'bandpass', 900, 0.035);
+      return;
+    }
+
+    if (type === 'wall') {
+      this.playTone(context, 'square', 120, 74, 0.12, 0.085, 'lowpass', 420);
+      this.playTone(context, 'triangle', 260, 130, 0.08, 0.045, 'lowpass', 600, 0.03);
+      return;
+    }
+
+    if (this.isWeaponBuilding(type) || type === 'droneTower') {
+      this.playTone(context, 'triangle', 320, 740, 0.13, 0.075, 'bandpass', 1100);
+      this.playTone(context, 'square', 170, 120, 0.09, 0.035, 'lowpass', 480, 0.045);
+      return;
+    }
+
+    this.playTone(context, 'triangle', 240, 620, 0.11, 0.065, 'bandpass', 850);
+    this.playTone(context, 'sine', 520, 780, 0.08, 0.035, 'highpass', 450, 0.04);
   }
 
   private playWeaponShotSound(type: WeaponSoundType): void {
