@@ -282,6 +282,7 @@ const BUILD_MENU_GAP = 4;
 const BUILD_MENU_AFTER_EXPANDED_GAP = 14;
 const BUILD_MENU_CARD_WIDTH = 102;
 const BUILD_MENU_CARD_COLUMNS = [72, 178];
+const BUILD_MENU_TEXT_RESOLUTION = 3;
 
 const RECIPE_GUIDE_PAGES: RecipeGuidePage[] = [
   {
@@ -1479,10 +1480,13 @@ export class GameScene extends Phaser.Scene {
           .setInteractive({ useHandCursor: true }),
       );
       this.trackBuildMenuObject(
-        this.addText(26, y - 11, `${expanded ? '-' : '+'} ${group.label}`, 15, '#fff3cc', true),
+        this.sharpenBuildMenuText(
+          this.addText(26, y - 11, `${expanded ? '-' : '+'} ${group.label}`, 15, '#fff3cc', true),
+          true,
+        ),
       );
       this.trackBuildMenuObject(
-        this.addText(198, y - 9, `${group.optionIds.length}`, 12, '#9fb3c3', true),
+        this.sharpenBuildMenuText(this.addText(198, y - 9, `${group.optionIds.length}`, 12, '#9fb3c3', true)),
       );
 
       headerBox.on(
@@ -1539,19 +1543,25 @@ export class GameScene extends Phaser.Scene {
             color: '#f4f0df',
             fontStyle: 'bold',
             align: 'center',
+            stroke: '#05070a',
+            strokeThickness: 1,
             wordWrap: { width: BUILD_MENU_CARD_WIDTH - 8 },
           })
           .setOrigin(0.5, 0)
           .setDepth(101);
+        this.sharpenBuildMenuText(labelText, true);
         const costText = this.add
           .text(optionX, optionY + 22, `建材 ${cost}`, {
             fontFamily: '"Yu Gothic", Meiryo, sans-serif',
             fontSize: '12px',
             color: '#ffd16a',
             fontStyle: 'bold',
+            stroke: '#05070a',
+            strokeThickness: 1,
           })
           .setOrigin(0.5, 0)
           .setDepth(101);
+        this.sharpenBuildMenuText(costText, true);
         this.trackBuildMenuObject(labelText);
         this.trackBuildMenuObject(costText);
 
@@ -1585,6 +1595,17 @@ export class GameScene extends Phaser.Scene {
     this.buildMenuObjects.push(object);
     this.registerUiObject(object);
     return object;
+  }
+
+  private sharpenBuildMenuText(
+    text: Phaser.GameObjects.Text,
+    withShadow = false,
+  ): Phaser.GameObjects.Text {
+    text.setResolution(BUILD_MENU_TEXT_RESOLUTION);
+    if (withShadow) {
+      text.setShadow(1, 1, '#000000', 0, false, true);
+    }
+    return text;
   }
 
   private clearBuildMenu(): void {
