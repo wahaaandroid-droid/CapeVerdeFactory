@@ -2021,7 +2021,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (building.type === 'miner' && this.grid.getTerrain(cell) !== 'resource') {
+    if (building.type === 'miner' && !this.grid.getResource(cell)) {
       this.setStatus('採掘機は資源ノードへ移設');
       return;
     }
@@ -2267,7 +2267,7 @@ export class GameScene extends Phaser.Scene {
         this.wave.state === 'preparation' &&
         this.grid.isBuildable(cell) &&
         !this.grid.getBuilding(cell)?.alive &&
-        (this.movingBuilding!.type !== 'miner' || this.grid.getTerrain(cell) === 'resource');
+        (this.movingBuilding!.type !== 'miner' || Boolean(this.grid.getResource(cell)));
       const selectableIsValid =
         this.wave.state === 'preparation' &&
         Boolean(building?.alive);
