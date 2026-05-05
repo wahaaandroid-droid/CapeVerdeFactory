@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import areaExplosionsUrl from '../../assets/images/area-explosions-generated.png';
+import generatedBuildingSpritesUrl from '../../assets/sprites/generated-building-sprites.png';
 import generatedConveyorsUrl from '../../assets/sprites/generated-conveyors.png';
 import generatedSpritesUrl from '../../assets/sprites/generated-sprites.png';
 import undergroundConveyorsUrl from '../../assets/sprites/underground-conveyors-generated.png';
@@ -558,6 +559,10 @@ export class GameScene extends Phaser.Scene {
       frameWidth: 128,
       frameHeight: 128,
     });
+    this.load.spritesheet('generated-building-sprites', generatedBuildingSpritesUrl, {
+      frameWidth: 128,
+      frameHeight: 128,
+    });
     this.load.spritesheet('underground-conveyors', undergroundConveyorsUrl, {
       frameWidth: 30,
       frameHeight: 30,
@@ -872,6 +877,19 @@ export class GameScene extends Phaser.Scene {
       { key: 'building-conveyor', frame: 2, width: 30, height: 30 },
       { key: 'building-ammoFactory', frame: 3, width: 30, height: 30 },
       { key: 'building-turret', frame: 4, width: 30, height: 30 },
+      { key: 'building-metalPlateFactory', sheet: 'generated-building-sprites', frame: 0, width: 30, height: 30 },
+      { key: 'building-wireFactory', sheet: 'generated-building-sprites', frame: 1, width: 30, height: 30 },
+      { key: 'building-plasticFactory', sheet: 'generated-building-sprites', frame: 2, width: 30, height: 30 },
+      { key: 'building-fuelFactory', sheet: 'generated-building-sprites', frame: 3, width: 30, height: 30 },
+      { key: 'building-specialAmmoFactory', sheet: 'generated-building-sprites', frame: 4, width: 30, height: 30 },
+      { key: 'building-missileFactory', sheet: 'generated-building-sprites', frame: 5, width: 30, height: 30 },
+      { key: 'building-droneFactory', sheet: 'generated-building-sprites', frame: 6, width: 30, height: 30 },
+      { key: 'building-sniperTurret', sheet: 'generated-building-sprites', frame: 7, width: 30, height: 30 },
+      { key: 'building-cannonTurret', sheet: 'generated-building-sprites', frame: 8, width: 30, height: 30 },
+      { key: 'building-empTurret', sheet: 'generated-building-sprites', frame: 9, width: 30, height: 30 },
+      { key: 'building-missileTurret', sheet: 'generated-building-sprites', frame: 10, width: 30, height: 30 },
+      { key: 'building-droneTower', sheet: 'generated-building-sprites', frame: 11, width: 30, height: 30 },
+      { key: 'building-wall', sheet: 'generated-building-sprites', frame: 12, width: 30, height: 30 },
       { key: 'item-ore', frame: 5, width: 10, height: 10 },
       { key: 'item-ammo', frame: 6, width: 10, height: 10 },
       { key: 'enemy-small', frame: 7, width: 24, height: 24 },
@@ -879,6 +897,8 @@ export class GameScene extends Phaser.Scene {
       { key: 'enemy-suicide', frame: 9, width: 24, height: 24 },
       { key: 'tile-lava', frame: 10, width: TILE_SIZE, height: TILE_SIZE, fill: 0x2b1714 },
       { key: 'tile-resource', frame: 5, width: TILE_SIZE, height: TILE_SIZE, fill: 0x303436 },
+      { key: 'tile-resourceCopper', sheet: 'generated-building-sprites', frame: 13, width: TILE_SIZE, height: TILE_SIZE, fill: 0x332d2a },
+      { key: 'tile-resourceOil', sheet: 'generated-building-sprites', frame: 14, width: TILE_SIZE, height: TILE_SIZE, fill: 0x20232b },
       { key: 'conveyor-curveDown', sheet: 'generated-conveyors', frame: 0, width: 30, height: 30 },
       { key: 'conveyor-curveUp', sheet: 'generated-conveyors', frame: 1, width: 30, height: 30 },
       { key: 'conveyor-junctionThree', sheet: 'generated-conveyors', frame: 2, width: 30, height: 30 },
