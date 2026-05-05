@@ -2410,10 +2410,10 @@ export class GameScene extends Phaser.Scene {
       const row = Math.floor(index / 2);
       pageObjects.push(
         ...this.createRecipeGuideCard(
-          115 + column * 500,
-          136 + row * 126,
-          455,
-          110,
+          92 + column * 510,
+          136 + row * 132,
+          490,
+          124,
           card,
         ),
       );
@@ -2523,37 +2523,65 @@ export class GameScene extends Phaser.Scene {
       .setStrokeStyle(2, card.accent, 0.75);
     objects.push(bg);
 
-    const iconBaseX = x + 32;
+    const iconBaseX = x + 30;
     const iconY = y + 34;
     card.icons.forEach((key, index) => {
       const icon = this.add
-        .sprite(iconBaseX + index * 42, iconY, key)
+        .sprite(iconBaseX + index * 36, iconY, key)
         .setDisplaySize(this.recipeIconSize(key), this.recipeIconSize(key));
       objects.push(icon);
     });
 
-    const title = this.add.text(x + 188, y + 15, card.title, {
+    const textX = x + 166;
+    const textWidth = width - 184;
+    const title = this.add.text(textX, y + 13, card.title, {
       fontFamily: '"Yu Gothic", Meiryo, sans-serif',
       fontSize: '17px',
       color: '#fff3cc',
       fontStyle: 'bold',
+      wordWrap: { width: textWidth },
     });
-    const subtitle = this.add.text(x + 188, y + 41, card.subtitle, {
+    const subtitle = this.add.text(textX, y + 41, card.subtitle, {
       fontFamily: '"Yu Gothic", Meiryo, sans-serif',
       fontSize: '14px',
       color: `#${card.accent.toString(16).padStart(6, '0')}`,
       fontStyle: 'bold',
+      wordWrap: { width: textWidth },
     });
-    const body = this.add.text(x + 188, y + 65, card.body, {
+    const body = this.add.text(textX, y + 65, this.wrapRecipeText(card.body), {
       fontFamily: '"Yu Gothic", Meiryo, sans-serif',
       fontSize: '12px',
       color: '#dce8ef',
-      lineSpacing: 3,
-      wordWrap: { width: width - 204 },
+      lineSpacing: 2,
+      wordWrap: { width: textWidth },
     });
     objects.push(title, subtitle, body);
 
     return objects;
+  }
+
+  private wrapRecipeText(text: string, maxChars = 23): string {
+    const lines: string[] = [];
+    let rest = text;
+
+    while (rest.length > maxChars) {
+      const slice = rest.slice(0, maxChars + 1);
+      const breakPoints = ['。', '、', ' ', '/'];
+      const breakIndex = breakPoints.reduce(
+        (best, point) => Math.max(best, slice.lastIndexOf(point)),
+        -1,
+      );
+      const useBreak =
+        breakIndex >= Math.floor(maxChars * 0.55) ? breakIndex + 1 : maxChars;
+      lines.push(rest.slice(0, useBreak));
+      rest = rest.slice(useBreak);
+    }
+
+    if (rest.length > 0) {
+      lines.push(rest);
+    }
+
+    return lines.join('\n');
   }
 
   private recipeIconSize(key: string): number {
