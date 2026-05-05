@@ -71,6 +71,7 @@ interface StageDefinition {
   unlockWave: number;
   objective: string;
   unlockSummary: string;
+  unlockCards: RecipeGuideCard[];
 }
 
 interface RecipeGuideCard {
@@ -293,6 +294,36 @@ const STAGE_DEFS: StageDefinition[] = [
     unlockWave: 0,
     objective: '鉄を掘り、弾薬工場からタレットへ弾を送る',
     unlockSummary: '採掘機 / 直線搬送 / 弾薬工場 / タレット',
+    unlockCards: [
+      {
+        title: '採掘機',
+        subtitle: '資源マスに置く',
+        body: '鉄鉱床に置き、向きの先へ鉄を出します。まず弾薬工場までつないでください。',
+        icons: ['tile-resource', 'building-miner', 'item-ironOre'],
+        accent: 0xc7d4dc,
+      },
+      {
+        title: 'コンベア直進',
+        subtitle: '物資の道を作る',
+        body: '採掘機、工場、タレットを接続します。ドラッグすると曲がりも自動で整います。',
+        icons: ['building-conveyor', 'item-ironOre', 'item-ammo'],
+        accent: 0xf3c53c,
+      },
+      {
+        title: '弾薬工場',
+        subtitle: '鉄 -> 通常弾',
+        body: '鉄を受け取ると通常弾を作ります。完成した弾はタレットへ搬送します。',
+        icons: ['building-ammoFactory', 'item-ironOre', 'item-ammo'],
+        accent: 0xff8d3f,
+      },
+      {
+        title: 'タレット / 防御壁',
+        subtitle: '序盤防衛の基本',
+        body: 'タレットは通常弾がある時だけ撃ちます。壁は敵の進路を受け止めます。',
+        icons: ['building-turret', 'building-wall', 'item-ammo'],
+        accent: 0xffcf65,
+      },
+    ],
   },
   {
     id: 2,
@@ -300,6 +331,36 @@ const STAGE_DEFS: StageDefinition[] = [
     unlockWave: 1,
     objective: '銅を加工し、強化弾で重装ドローンに備える',
     unlockSummary: '銅加工 / 分岐搬送 / 特殊弾 / スナイパー',
+    unlockCards: [
+      {
+        title: 'T字 / 十字コンベア',
+        subtitle: 'ラインを分配する',
+        body: '1本の素材ラインを複数工場へ分けます。片側が詰まっても空き方向へ流します。',
+        icons: ['conveyor-junctionThree', 'conveyor-junctionFour', 'item-copperOre'],
+        accent: 0xf3c53c,
+      },
+      {
+        title: '金属板工場',
+        subtitle: '鉄/銅 -> 板',
+        body: '鉄板と銅板を作ります。特殊弾や大型兵器の土台になる中間素材です。',
+        icons: ['building-metalPlateFactory', 'item-ironPlate', 'item-copperPlate'],
+        accent: 0xd5e2ea,
+      },
+      {
+        title: 'ワイヤー工場',
+        subtitle: '銅 -> ワイヤー',
+        body: '銅をワイヤーへ加工します。EMP弾、ミサイル、ドローンに使います。',
+        icons: ['building-wireFactory', 'item-copperOre', 'item-wire'],
+        accent: 0xf4b552,
+      },
+      {
+        title: '特殊弾 / スナイパー',
+        subtitle: '重装敵に備える',
+        body: '鉄板+銅板で強化弾を作り、スナイパーへ送ると長射程高威力で撃てます。',
+        icons: ['building-specialAmmoFactory', 'item-enhancedAmmo', 'building-sniperTurret'],
+        accent: 0xffe073,
+      },
+    ],
   },
   {
     id: 3,
@@ -307,6 +368,36 @@ const STAGE_DEFS: StageDefinition[] = [
     unlockWave: 3,
     objective: '原油を燃料と樹脂に分け、焼夷弾とEMPを作る',
     unlockSummary: '化学工場 / 地下搬送 / 大型砲台 / EMP砲台',
+    unlockCards: [
+      {
+        title: '地下コンベア',
+        subtitle: 'ラインを交差させる',
+        body: '入口から向きの先5マス以内の出口へ送ります。混雑する工場前を迂回できます。',
+        icons: ['conveyor-undergroundInput', 'conveyor-undergroundOutput', 'building-conveyor'],
+        accent: 0x7ddcff,
+      },
+      {
+        title: '化学工場',
+        subtitle: '原油 -> 樹脂/燃料',
+        body: 'プラスチック工場は樹脂、燃料工場は燃料を作ります。特殊弾の素材です。',
+        icons: ['building-plasticFactory', 'building-fuelFactory', 'item-oil'],
+        accent: 0x9de8ff,
+      },
+      {
+        title: '大型砲台',
+        subtitle: '焼夷弾で範囲攻撃',
+        body: '鉄板+燃料で焼夷弾を作り、大型砲台へ送ると密集した敵をまとめて削れます。',
+        icons: ['building-specialAmmoFactory', 'item-incendiaryAmmo', 'building-cannonTurret'],
+        accent: 0xff6834,
+      },
+      {
+        title: '電磁砲台',
+        subtitle: 'EMP弾で足止め',
+        body: 'ワイヤー+樹脂でEMP弾を作ります。敵を止めて他の砲台の時間を稼ぎます。',
+        icons: ['item-wire', 'item-empAmmo', 'building-empTurret'],
+        accent: 0x68d7ff,
+      },
+    ],
   },
   {
     id: 4,
@@ -314,6 +405,36 @@ const STAGE_DEFS: StageDefinition[] = [
     unlockWave: 5,
     objective: 'ミサイルかドローンの長い生産ラインを完成させる',
     unlockSummary: 'ミサイル / ドローン / 長射程防衛',
+    unlockCards: [
+      {
+        title: 'ミサイル工場',
+        subtitle: '鉄板2+線2+燃料4',
+        body: '重い素材をまとめてミサイルにします。安定供給には分岐と地下搬送が有効です。',
+        icons: ['building-missileFactory', 'item-ironPlate', 'item-missile'],
+        accent: 0xfff0a6,
+      },
+      {
+        title: 'ミサイル砲台',
+        subtitle: '超長射程の範囲攻撃',
+        body: 'ミサイルを受け取ると遠くの敵群を爆破します。発射間隔は長いので弾切れに注意します。',
+        icons: ['building-missileTurret', 'item-missile'],
+        accent: 0xff8d3f,
+      },
+      {
+        title: 'ドローン工場',
+        subtitle: '板5+線5+樹脂5',
+        body: 'ドローン機体を作ります。素材消費が重いので、余剰ラインから作ると安定します。',
+        icons: ['building-droneFactory', 'item-wire', 'item-drone'],
+        accent: 0x9de8ff,
+      },
+      {
+        title: 'ドローン司令塔',
+        subtitle: '自動追撃を発進',
+        body: 'ドローンを受け取ると戦闘中に発進します。抜けてきた敵への追撃に向きます。',
+        icons: ['building-droneTower', 'item-drone'],
+        accent: 0x9de8ff,
+      },
+    ],
   },
 ];
 
@@ -636,6 +757,7 @@ export class GameScene extends Phaser.Scene {
   private statusMessage = '準備フェーズでラインを組み、準備完了で戦闘開始';
   private statusUntil = 0;
   private audioContext?: AudioContext;
+  private stageUnlockOverlay?: Phaser.GameObjects.Container;
   private ui!: {
     wave: Phaser.GameObjects.Text;
     stage: Phaser.GameObjects.Text;
@@ -706,6 +828,7 @@ export class GameScene extends Phaser.Scene {
     this.createInput();
     this.createHitEvents();
     this.wave.startPreparation();
+    this.showStageUnlockOverlay(STAGE_DEFS[0]);
   }
 
   update(time: number, delta: number): void {
@@ -773,6 +896,9 @@ export class GameScene extends Phaser.Scene {
       : '';
     this.setStatus(`ウェーブ${wave}クリア: 建材+${bonus}${unlockText}`, 4200);
     this.createBuildMenu();
+    if (unlockedStage) {
+      this.showStageUnlockOverlay(unlockedStage);
+    }
   }
 
   applyUpgrade(id: UpgradeId): void {
@@ -3120,6 +3246,127 @@ export class GameScene extends Phaser.Scene {
 
     this.recipePage = 0;
     this.showRecipeOverlay();
+  }
+
+  private showStageUnlockOverlay(stage: StageDefinition): void {
+    this.hideStageUnlockOverlay();
+
+    const container = this.add.container(0, 0).setDepth(255);
+    const shade = this.add
+      .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x02050a, 0.74)
+      .setOrigin(0)
+      .setInteractive({ useHandCursor: true });
+    const panel = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1038, 606, 0x101820, 0.97)
+      .setStrokeStyle(2, 0xd9a85f, 0.95)
+      .setInteractive({ useHandCursor: true });
+    const eyebrow = this.add
+      .text(GAME_WIDTH / 2, 74, '機能解放', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '16px',
+        color: '#7ddcff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    const title = this.add
+      .text(GAME_WIDTH / 2, 104, stage.label, {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '31px',
+        color: '#fff3cc',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    const objective = this.add
+      .text(GAME_WIDTH / 2, 140, `目標: ${stage.objective}`, {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '15px',
+        color: '#dce8ef',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
+    const cardObjects: Phaser.GameObjects.GameObject[] = [];
+    stage.unlockCards.forEach((card, index) => {
+      const column = index % 2;
+      const row = Math.floor(index / 2);
+      cardObjects.push(
+        ...this.createRecipeGuideCard(
+          92 + column * 510,
+          180 + row * 144,
+          490,
+          132,
+          card,
+        ),
+      );
+    });
+
+    const hint = this.add
+      .text(
+        GAME_WIDTH / 2,
+        660,
+        stage.unlockWave > 0
+          ? '閉じるとアップグレード選択に戻ります'
+          : '閉じると準備フェーズを開始します',
+        {
+          fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+          fontSize: '13px',
+          color: '#9fb3c3',
+          fontStyle: 'bold',
+        },
+      )
+      .setOrigin(0.5);
+    const closeButton = this.add
+      .rectangle(GAME_WIDTH / 2, 706, 176, 36, 0x223d4a, 1)
+      .setStrokeStyle(2, 0x7ddcff, 1)
+      .setInteractive({ useHandCursor: true });
+    const closeText = this.add
+      .text(GAME_WIDTH / 2, 706, '閉じる', {
+        fontFamily: '"Yu Gothic", Meiryo, sans-serif',
+        fontSize: '17px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+
+    const close = (
+      _pointer: Phaser.Input.Pointer,
+      _localX: number,
+      _localY: number,
+      event: Phaser.Types.Input.EventData,
+    ) => {
+      event.stopPropagation();
+      this.hideStageUnlockOverlay();
+    };
+    shade.on('pointerdown', close);
+    panel.on(
+      'pointerdown',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => event.stopPropagation(),
+    );
+    closeButton.on('pointerdown', close);
+
+    container.add([
+      shade,
+      panel,
+      eyebrow,
+      title,
+      objective,
+      ...cardObjects,
+      hint,
+      closeButton,
+      closeText,
+    ]);
+    this.stageUnlockOverlay = container;
+    this.registerUiObject(container);
+  }
+
+  private hideStageUnlockOverlay(): void {
+    this.stageUnlockOverlay?.destroy();
+    this.stageUnlockOverlay = undefined;
   }
 
   private showRecipeOverlay(): void {
