@@ -27,7 +27,6 @@ import {
   GRID_HEIGHT,
   GRID_WIDTH,
   ItemType,
-  LEFT_EXPANSION_COLUMNS,
   MAP_HEIGHT_PX,
   MAP_ORIGIN_X,
   MAP_ORIGIN_Y,
@@ -850,7 +849,7 @@ export class GameScene extends Phaser.Scene {
     this.worldCamera
       .setViewport(WORLD_VIEW_X, WORLD_VIEW_Y, WORLD_VIEW_WIDTH, WORLD_VIEW_HEIGHT)
       .setZoom(0.9)
-      .centerOn(MAP_WIDTH_PX * 0.75, MAP_HEIGHT_PX * 0.5)
+      .centerOn(TILE_SIZE * 8, MAP_HEIGHT_PX * 0.5)
       .setBackgroundColor(0x05080c);
 
     this.uiCamera = this.cameras.add(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -1012,20 +1011,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createStarterBase(): void {
-    const shift = LEFT_EXPANSION_COLUMNS;
-    this.core = this.factory.createBuilding('core', { x: 10 + shift, y: 10 }, 'up');
-    this.factory.createBuilding('miner', { x: 4 + shift, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 5 + shift, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 6 + shift, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 7 + shift, y: 8 }, 'right');
-    const ammoFactory = this.factory.createBuilding('ammoFactory', { x: 8 + shift, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 9 + shift, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 10 + shift, y: 8 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 11 + shift, y: 8 }, 'down');
-    this.factory.createBuilding('conveyor', { x: 11 + shift, y: 9 }, 'down');
-    this.factory.createBuilding('conveyor', { x: 11 + shift, y: 10 }, 'right');
-    this.factory.createBuilding('conveyor', { x: 12 + shift, y: 10 }, 'right');
-    const turret = this.factory.createBuilding('turret', { x: 13 + shift, y: 10 }, 'left');
+    this.core = this.factory.createBuilding('core', { x: 4, y: 11 }, 'up');
+    this.factory.createBuilding('miner', { x: 2, y: 9 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 3, y: 9 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 4, y: 9 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 5, y: 9 }, 'right');
+    const ammoFactory = this.factory.createBuilding('ammoFactory', { x: 6, y: 9 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 7, y: 9 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 8, y: 9 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 9, y: 9 }, 'down');
+    this.factory.createBuilding('conveyor', { x: 9, y: 10 }, 'down');
+    this.factory.createBuilding('conveyor', { x: 9, y: 11 }, 'right');
+    this.factory.createBuilding('conveyor', { x: 10, y: 11 }, 'right');
+    const turret = this.factory.createBuilding('turret', { x: 11, y: 11 }, 'right');
 
     ammoFactory.oreStored = 2;
     turret.ammoStored = 8;

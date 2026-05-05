@@ -426,7 +426,7 @@ export function manhattan(a: Cell, b: Cell): number {
 
 export function storageCapacity(type: BuildingType, item: ItemType): number {
   if (type === 'core') {
-    return 120;
+    return 0;
   }
 
   if (type === 'conveyor') {
