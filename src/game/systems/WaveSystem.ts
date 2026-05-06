@@ -1,14 +1,19 @@
 import type { GameScene } from '../GameScene';
-import { EnemyType } from '../types';
+import { Cell, EnemyType } from '../types';
 
 type WaveState = 'preparation' | 'combat' | 'upgrade' | 'finished' | 'stopped';
+
+export interface SpawnPlan {
+  type: EnemyType;
+  cell: Cell;
+}
 
 export class WaveSystem {
   readonly maxWave = 10;
   wave = 0;
   state: WaveState = 'preparation';
   private nextSpawnAt = 0;
-  private spawnQueue: EnemyType[] = [];
+  private spawnQueue: SpawnPlan[] = [];
 
   constructor(private readonly scene: GameScene) {}
 
@@ -20,7 +25,7 @@ export class WaveSystem {
 
     this.state = 'preparation';
     this.spawnQueue = [];
-    this.scene.setStatus('準備フェーズ: ラインを組んで準備完了を押す');
+    this.scene.setStatus(`準備フェーズ: ${this.scene.nextWaveSummary()}`);
   }
 
   startCombat(): void {
@@ -37,9 +42,9 @@ export class WaveSystem {
     }
 
     if (this.spawnQueue.length > 0 && time >= this.nextSpawnAt) {
-      const enemyType = this.spawnQueue.shift();
-      if (enemyType) {
-        this.scene.spawnEnemy(enemyType, this.wave);
+      const plan = this.spawnQueue.shift();
+      if (plan) {
+        this.scene.spawnEnemy(plan.type, this.wave, plan.cell);
       }
       this.nextSpawnAt = time + Math.max(360, 850 - this.wave * 35);
     }
@@ -52,6 +57,14 @@ export class WaveSystem {
   stop(): void {
     this.state = 'stopped';
     this.spawnQueue = [];
+  }
+
+  previewNextWave(): SpawnPlan[] {
+    if (this.wave >= this.maxWave) {
+      return [];
+    }
+
+    return this.buildWave(this.wave + 1);
   }
 
   private beginWave(): void {
@@ -74,20 +87,26 @@ export class WaveSystem {
     this.scene.upgrades.show();
   }
 
-  private buildWave(wave: number): EnemyType[] {
+  private buildWave(wave: number): SpawnPlan[] {
     const total = 4 + wave * 2;
-    const enemies: EnemyType[] = [];
+    const enemies: SpawnPlan[] = [];
 
     for (let i = 0; i < total; i += 1) {
+      let type: EnemyType;
       if (wave >= 8 && i % 5 === 0) {
-        enemies.push('heavy');
+        type = 'heavy';
       } else if (wave >= 5 && i % 6 === 4) {
-        enemies.push('suicide');
+        type = 'suicide';
       } else if (wave >= 3 && i % 4 === 2) {
-        enemies.push('heavy');
+        type = 'heavy';
       } else {
-        enemies.push('small');
+        type = 'small';
       }
+
+      enemies.push({
+        type,
+        cell: this.scene.grid.plannedSpawnCell(wave, i),
+      });
     }
 
     return enemies;

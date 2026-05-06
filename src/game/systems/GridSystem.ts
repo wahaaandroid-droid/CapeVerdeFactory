@@ -291,6 +291,29 @@ export class GridSystem {
     return { ...this.spawnCells[index] };
   }
 
+  plannedSpawnCell(wave: number, spawnIndex: number): Cell {
+    const index = (wave + spawnIndex * 2 + Math.floor(spawnIndex / 3)) %
+      this.spawnCells.length;
+    return { ...this.spawnCells[index] };
+  }
+
+  laneLabel(cell: Cell): string {
+    const index = this.spawnCells.findIndex((spawnCell) => cellKey(spawnCell) === cellKey(cell));
+    if (index === 0) {
+      return '上段';
+    }
+    if (index === 1) {
+      return '中上';
+    }
+    if (index === 2) {
+      return '中下';
+    }
+    if (index === 3) {
+      return '下段';
+    }
+    return `Y${cell.y}`;
+  }
+
   private generateMap(): void {
     const lava = new Set(FIXED_LAVA_CELLS.map((cell) => cellKey(cell)));
     const resources = new Map<string, ResourceKind>(

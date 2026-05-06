@@ -65,7 +65,12 @@ export type UpgradeId =
   | 'ammoSaver'
   | 'specialist'
   | 'stockpile'
-  | 'droneOps';
+  | 'droneOps'
+  | 'beltDuplicator'
+  | 'shellSplash'
+  | 'wallCapacitor'
+  | 'overtimeDirective'
+  | 'salvageOps';
 export type ConveyorVariant =
   | 'straight'
   | 'curveDown'

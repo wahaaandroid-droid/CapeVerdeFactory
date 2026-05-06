@@ -58,6 +58,36 @@ const UPGRADES: UpgradeDefinition[] = [
     body: 'ドローン火力 +35%',
     color: 0x9de8ff,
   },
+  {
+    id: 'beltDuplicator',
+    title: '分岐コピー',
+    body: '搬出時に物資を複製',
+    color: 0xf5c331,
+  },
+  {
+    id: 'shellSplash',
+    title: '通常弾榴弾化',
+    body: '通常タレット弾が小範囲爆発',
+    color: 0xffcf65,
+  },
+  {
+    id: 'wallCapacitor',
+    title: '帯電防壁',
+    body: '壁が殴られると周囲に反撃',
+    color: 0x68d7ff,
+  },
+  {
+    id: 'overtimeDirective',
+    title: '残業指令',
+    body: '過負荷の持続延長・費用低下',
+    color: 0xff6b1a,
+  },
+  {
+    id: 'salvageOps',
+    title: 'スクラップ回収',
+    body: '撃破報酬増加・修理費低下',
+    color: 0xd9a85f,
+  },
 ];
 
 export class UpgradeSystem {
@@ -78,7 +108,7 @@ export class UpgradeSystem {
       .rectangle(590, 380, 640, 310, 0x101820, 0.96)
       .setStrokeStyle(2, 0xb48b5e, 1);
     const title = this.scene.add
-      .text(590, 256, 'アップグレードを選択', {
+      .text(590, 256, '工場長命令を選択', {
         fontFamily: '"Yu Gothic", Meiryo, sans-serif',
         fontSize: '28px',
         color: '#fff4d2',

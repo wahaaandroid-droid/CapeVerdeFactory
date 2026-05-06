@@ -13,6 +13,7 @@ import { GridSystem } from './systems/GridSystem';
 import { createPixelTextures } from './systems/TextureFactory';
 import { UpgradeSystem } from './systems/UpgradeSystem';
 import { WaveSystem } from './systems/WaveSystem';
+import type { SpawnPlan } from './systems/WaveSystem';
 import {
   BUILDING_DEFS,
   BuildingType,
@@ -725,6 +726,13 @@ export class GameScene extends Phaser.Scene {
     ammoSaveChance: 0,
     specialDamageMultiplier: 1,
     droneDamageMultiplier: 1,
+    beltDuplicateChance: 0,
+    standardSplashRadius: 0,
+    wallRetaliateDamage: 0,
+    overdriveDurationMultiplier: 1,
+    overdriveCostMultiplier: 1,
+    rewardMultiplier: 1,
+    repairCostMultiplier: 1,
   };
 
   private selectedBuild: BuildableType = 'conveyor';
@@ -754,6 +762,8 @@ export class GameScene extends Phaser.Scene {
   private isDemolishDragging = false;
   private lastDemolishCell: Cell | null = null;
   private gameEnded = false;
+  private overdriveUntil = 0;
+  private overdriveCooldownUntil = 0;
   private statusMessage = '準備フェーズでラインを組み、準備完了で戦闘開始';
   private statusUntil = 0;
   private audioContext?: AudioContext;
@@ -849,18 +859,62 @@ export class GameScene extends Phaser.Scene {
     this.updatePreview();
   }
 
-  spawnEnemy(type: EnemyType, wave: number): void {
+  spawnEnemy(type: EnemyType, wave: number, cell = this.grid.randomSpawnCell(wave)): void {
     const enemy = this.enemies.find((candidate) => !candidate.active) ?? this.addEnemy();
-    enemy.spawn(type, this.grid.randomSpawnCell(wave), wave);
+    enemy.spawn(type, cell, wave);
   }
 
   hasActiveEnemies(): boolean {
     return this.enemies.some((enemy) => enemy.active);
   }
 
+  effectiveBeltIntervalMs(): number {
+    const multiplier = this.isOverdriveActive() ? 0.68 : 1;
+    return Math.max(120, Math.floor(this.modifiers.beltIntervalMs * multiplier));
+  }
+
+  effectiveProductionIntervalMs(): number {
+    const multiplier = this.isOverdriveActive() ? 0.72 : 1;
+    return Math.max(420, Math.floor(this.modifiers.productionIntervalMs * multiplier));
+  }
+
+  nextWaveSummary(): string {
+    const plan = this.wave.previewNextWave();
+    if (plan.length <= 0) {
+      return '全ウェーブ突破済み';
+    }
+
+    const counts = this.countSpawnPlan(plan);
+    const lanes = [...new Set(plan.slice(0, 8).map((spawn) => this.grid.laneLabel(spawn.cell)))];
+    const warnings: string[] = [];
+    if ((counts.heavy ?? 0) > 0) {
+      warnings.push('重装');
+    }
+    if ((counts.suicide ?? 0) > 0) {
+      warnings.push('自爆');
+    }
+
+    const warningText = warnings.length > 0 ? ` / 警戒:${warnings.join('+')}` : '';
+    return `次W${this.wave.wave + 1}: 小${counts.small ?? 0} 重${counts.heavy ?? 0} 自爆${
+      counts.suicide ?? 0
+    } / 侵攻:${lanes.join('/')}${warningText}`;
+  }
+
   damageBuilding(building: Building, amount: number): void {
     const destroyed = building.damage(amount);
     this.cameras.main.shake(45, 0.0016);
+
+    if (building.type === 'wall' && this.modifiers.wallRetaliateDamage > 0) {
+      const position = building.getWorldPosition();
+      this.affectEnemiesArea(
+        position,
+        68,
+        this.modifiers.wallRetaliateDamage,
+        220,
+        0x68d7ff,
+        'emp',
+      );
+    }
 
     if (destroyed) {
       this.explosion(building.getWorldPosition(), building.type === 'core' ? 0x37cfff : 0xff6b1a);
@@ -881,8 +935,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   onEnemyKilled(reward: number, position: Phaser.Math.Vector2): void {
-    this.parts += reward;
-    this.floatText(position, `+${reward}`, 0xf3d26a);
+    const scaledReward = Math.round(reward * this.modifiers.rewardMultiplier);
+    this.parts += scaledReward;
+    this.floatText(position, `+${scaledReward}`, 0xf3d26a);
     this.explosion(position, 0xff9b38, 0.55);
   }
 
@@ -931,6 +986,29 @@ export class GameScene extends Phaser.Scene {
     } else if (id === 'droneOps') {
       this.modifiers.droneDamageMultiplier *= 1.35;
       this.setStatus('ドローン火力が上昇');
+    } else if (id === 'beltDuplicator') {
+      this.modifiers.beltDuplicateChance = Math.min(
+        0.28,
+        this.modifiers.beltDuplicateChance + 0.09,
+      );
+      this.setStatus('分岐コピー: コンベア搬出時に物資を複製');
+    } else if (id === 'shellSplash') {
+      this.modifiers.standardSplashRadius = Math.min(
+        58,
+        this.modifiers.standardSplashRadius + 34,
+      );
+      this.setStatus('通常弾榴弾化: タレット弾が小範囲爆発');
+    } else if (id === 'wallCapacitor') {
+      this.modifiers.wallRetaliateDamage += 18;
+      this.setStatus('帯電防壁: 壁が攻撃された時に反撃');
+    } else if (id === 'overtimeDirective') {
+      this.modifiers.overdriveDurationMultiplier *= 1.45;
+      this.modifiers.overdriveCostMultiplier *= 0.78;
+      this.setStatus('残業指令: 過負荷を長く安く使える');
+    } else if (id === 'salvageOps') {
+      this.modifiers.rewardMultiplier *= 1.18;
+      this.modifiers.repairCostMultiplier *= 0.82;
+      this.setStatus('スクラップ回収: 撃破報酬増加・修理費低下');
     } else {
       this.parts += 220;
       this.setStatus('追加建材を確保');
@@ -944,6 +1022,14 @@ export class GameScene extends Phaser.Scene {
 
     if (id === 'droneOps') {
       return this.wave.wave >= 5;
+    }
+
+    if (id === 'beltDuplicator' || id === 'shellSplash' || id === 'wallCapacitor') {
+      return this.wave.wave >= 1;
+    }
+
+    if (id === 'overtimeDirective' || id === 'salvageOps') {
+      return this.wave.wave >= 2;
     }
 
     return true;
@@ -1618,6 +1704,10 @@ export class GameScene extends Phaser.Scene {
         this.setMode(this.mode === 'demolish' ? 'build' : 'demolish');
       }
 
+      if (event.key.toLowerCase() === 'o') {
+        this.activateOverdrive();
+      }
+
       const number = Number(event.key);
       if (number >= 1 && number <= BUILD_OPTIONS.length) {
         this.selectBuildOption(BUILD_OPTIONS[number - 1]);
@@ -1808,6 +1898,8 @@ export class GameScene extends Phaser.Scene {
         this.resumeAudio();
         if (this.wave.state === 'preparation') {
           this.wave.startCombat();
+        } else if (this.wave.state === 'combat') {
+          this.activateOverdrive();
         }
       },
     );
@@ -1939,7 +2031,7 @@ export class GameScene extends Phaser.Scene {
       parts: this.addText(24, 146, '', 17, '#d6e3eb'),
       ore: this.addText(24, 174, '', 15, '#d6e3eb'),
       ammo: this.addText(24, 200, '', 13, '#ffb174'),
-      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 24, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  M:移設  X:解体', 14, '#fff3cc', true),
+      controls: this.addText(WORLD_VIEW_X + 26, lowerPanelY + 24, 'ホイール:ズーム  ドラッグ/WASD:移動  R:向き  O:過負荷  M:移設  X:解体', 14, '#fff3cc', true),
       selected: selectedText,
       status: statusText,
       readyButton,
@@ -2230,7 +2322,8 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      turret.nextFireAt = time + 560 * config.fireIntervalMultiplier;
+      const overdriveMultiplier = this.isOverdriveActive() ? 0.76 : 1;
+      turret.nextFireAt = time + 560 * config.fireIntervalMultiplier * overdriveMultiplier;
       if (Math.random() >= this.modifiers.ammoSaveChance) {
         turret.removeStored(config.ammo);
       }
@@ -2241,22 +2334,28 @@ export class GameScene extends Phaser.Scene {
       const damage =
         this.modifiers.turretDamage *
         config.damageMultiplier *
-        this.weaponDamageMultiplier(turret.type);
+        this.weaponDamageMultiplier(turret.type) *
+        this.overdriveDamageMultiplier();
+      const splashRadius =
+        turret.type === 'turret' ? this.modifiers.standardSplashRadius : 0;
       bullet.fire(
         position.x,
         position.y,
         target,
         damage,
         config.color,
-        config.radius || config.stunMs
-          ? (_target, hitPosition) => {
+        config.radius || config.stunMs || splashRadius > 0
+          ? (hitTarget, hitPosition) => {
+              if (splashRadius > 0 && hitTarget) {
+                hitTarget.damage(damage);
+              }
               this.affectEnemiesArea(
                 hitPosition,
-                config.radius ?? 20,
-                damage,
+                config.radius ?? splashRadius,
+                splashRadius > 0 ? damage * 0.35 : damage,
                 config.stunMs ?? 0,
                 config.color,
-                config.areaEffect,
+                config.areaEffect ?? 'incendiary',
               );
             }
           : null,
@@ -2303,7 +2402,10 @@ export class GameScene extends Phaser.Scene {
             x,
             y,
             target,
-            this.modifiers.turretDamage * 0.45 * this.modifiers.droneDamageMultiplier,
+            this.modifiers.turretDamage *
+              0.45 *
+              this.modifiers.droneDamageMultiplier *
+              this.overdriveDamageMultiplier(),
             0x9de8ff,
           );
         },
@@ -2789,7 +2891,7 @@ export class GameScene extends Phaser.Scene {
 
     const baseCost = this.buildCost(building.type, building.conveyorVariant);
     if (!building.alive) {
-      return baseCost;
+      return Math.max(1, Math.ceil(baseCost * this.modifiers.repairCostMultiplier));
     }
 
     if (baseCost <= 0) {
@@ -2797,7 +2899,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const missingRatio = (building.maxHp - building.hp) / building.maxHp;
-    return Math.max(1, Math.ceil(baseCost * missingRatio));
+    return Math.max(1, Math.ceil(baseCost * missingRatio * this.modifiers.repairCostMultiplier));
   }
 
   private repairAllCost(): number {
@@ -2814,6 +2916,76 @@ export class GameScene extends Phaser.Scene {
 
   private needsRepair(building: Building): boolean {
     return !building.alive || building.hp < building.maxHp;
+  }
+
+  private countSpawnPlan(plan: SpawnPlan[]): Partial<Record<EnemyType, number>> {
+    return plan.reduce<Partial<Record<EnemyType, number>>>((counts, spawn) => {
+      counts[spawn.type] = (counts[spawn.type] ?? 0) + 1;
+      return counts;
+    }, {});
+  }
+
+  private defaultStatusText(): string {
+    if (this.wave.state === 'preparation') {
+      return `${this.nextWaveSummary()} / 準備完了で開始`;
+    }
+
+    if (this.wave.state === 'combat') {
+      return this.isOverdriveActive()
+        ? '工場長の残業指令: 生産・搬送・射撃が加速中'
+        : `O または左のボタンで過負荷発動（建材${this.overdriveCost()}）`;
+    }
+
+    return '';
+  }
+
+  private isOverdriveActive(time = this.time.now): boolean {
+    return time < this.overdriveUntil;
+  }
+
+  private overdriveDamageMultiplier(): number {
+    return this.isOverdriveActive() ? 1.22 : 1;
+  }
+
+  private overdriveCost(): number {
+    return Math.max(
+      35,
+      Math.floor((70 + this.wave.wave * 18) * this.modifiers.overdriveCostMultiplier),
+    );
+  }
+
+  private overdriveDurationMs(): number {
+    return Math.floor(8500 * this.modifiers.overdriveDurationMultiplier);
+  }
+
+  private activateOverdrive(): void {
+    if (this.wave.state !== 'combat') {
+      this.setStatus('過負荷は戦闘フェーズ中のみ使用できます');
+      return;
+    }
+
+    const now = this.time.now;
+    if (this.isOverdriveActive(now)) {
+      this.setStatus('すでに過負荷稼働中です');
+      return;
+    }
+
+    if (now < this.overdriveCooldownUntil) {
+      this.setStatus(`過負荷は冷却中: ${Math.ceil((this.overdriveCooldownUntil - now) / 1000)}秒`);
+      return;
+    }
+
+    const cost = this.overdriveCost();
+    if (this.parts < cost) {
+      this.setStatus(`過負荷には建材${cost}が必要`);
+      return;
+    }
+
+    this.parts -= cost;
+    this.overdriveUntil = now + this.overdriveDurationMs();
+    this.overdriveCooldownUntil = now + 24000;
+    this.cameras.main.shake(90, 0.0018);
+    this.setStatus(`工場長の残業指令: ${Math.ceil(this.overdriveDurationMs() / 1000)}秒間ライン加速`, 2600);
   }
 
   private isWeaponBuilding(type: BuildingType): type is WeaponBuildingType {
@@ -3176,10 +3348,45 @@ export class GameScene extends Phaser.Scene {
         this.direction,
       )}\n機能:${this.selectedBuildDescription()}`,
     );
+    const overdriveCost = this.overdriveCost();
+    const overdriveActive = this.isOverdriveActive(time);
+    const overdriveReady =
+      this.wave.state === 'combat' &&
+      !overdriveActive &&
+      time >= this.overdriveCooldownUntil &&
+      this.parts >= overdriveCost;
+    const readyButtonActive = this.wave.state === 'preparation' || overdriveReady || overdriveActive;
+    const readyLabel =
+      this.wave.state === 'preparation'
+        ? '準備完了'
+        : this.wave.state === 'combat'
+          ? overdriveActive
+            ? `残業中 ${Math.ceil((this.overdriveUntil - time) / 1000)}s`
+            : time < this.overdriveCooldownUntil
+              ? `冷却 ${Math.ceil((this.overdriveCooldownUntil - time) / 1000)}s`
+              : `過負荷 ${overdriveCost}`
+          : '準備完了';
     this.ui.readyButton
-      .setFillStyle(this.wave.state === 'preparation' ? 0x1f4c3a : 0x24303a, 1)
-      .setStrokeStyle(2, this.wave.state === 'preparation' ? 0x79f0a4 : 0x57606a, 1);
-    this.ui.readyText.setAlpha(this.wave.state === 'preparation' ? 1 : 0.45);
+      .setFillStyle(
+        this.wave.state === 'preparation'
+          ? 0x1f4c3a
+          : overdriveActive
+            ? 0x6a3422
+            : overdriveReady
+              ? 0x4b2f1c
+              : 0x24303a,
+        1,
+      )
+      .setStrokeStyle(
+        2,
+        this.wave.state === 'preparation'
+          ? 0x79f0a4
+          : overdriveActive || overdriveReady
+            ? 0xffa35c
+            : 0x57606a,
+        1,
+      );
+    this.ui.readyText.setText(readyLabel).setAlpha(readyButtonActive ? 1 : 0.45);
     const repairCost = this.repairAllCost();
     const repairCount = this.repairTargetCount();
     const canRepair = this.wave.state === 'preparation' && repairCount > 0 && this.parts >= repairCost;
@@ -3205,7 +3412,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.statusUntil <= 0) {
-      this.ui.status.setText(this.hoverDiagnostic());
+      this.ui.status.setText(this.hoverDiagnostic() || this.defaultStatusText());
     }
   }
 

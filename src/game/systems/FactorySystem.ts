@@ -200,7 +200,7 @@ export class FactorySystem {
   update(time: number): void {
     for (const building of this.grid.allBuildings()) {
       if (!building.alive) {
-        building.updateVisuals(time, this.scene.modifiers.beltIntervalMs);
+        building.updateVisuals(time, this.scene.effectiveBeltIntervalMs());
         continue;
       }
 
@@ -212,7 +212,7 @@ export class FactorySystem {
         this.updateConveyor(building, time);
       }
 
-      building.updateVisuals(time, this.scene.modifiers.beltIntervalMs);
+      building.updateVisuals(time, this.scene.effectiveBeltIntervalMs());
     }
   }
 
@@ -247,7 +247,7 @@ export class FactorySystem {
     const resource = this.grid.getResource(building.cell);
     const speedBonus = resource ? 1 : 1.8;
     building.nextWorkAt =
-      time + this.scene.modifiers.productionIntervalMs * speedBonus;
+      time + this.scene.effectiveProductionIntervalMs() * speedBonus;
 
     if (!resource) {
       return;
@@ -282,7 +282,7 @@ export class FactorySystem {
 
     building.addStored(recipe.output, recipe.amount ?? 1);
     building.nextRecipeIndex = (recipes.indexOf(recipe) + 1) % Math.max(1, recipes.length);
-    building.nextWorkAt = time + this.scene.modifiers.productionIntervalMs * 1.15;
+    building.nextWorkAt = time + this.scene.effectiveProductionIntervalMs() * 1.15;
     building.flash(recipe.color);
     this.scene.floatText(building.getWorldPosition(), `+${recipe.label}`, recipe.color);
     this.tryOutputStored(building, recipe.output, time);
@@ -300,8 +300,13 @@ export class FactorySystem {
     }
 
     if (this.outputItem(building, building.item)) {
-      building.setItem(null);
-      building.nextMoveAt = time + this.scene.modifiers.beltIntervalMs;
+      if (Math.random() < this.scene.modifiers.beltDuplicateChance) {
+        building.flash(0xf5c331);
+        this.scene.floatText(building.getWorldPosition(), '複製', 0xf5c331);
+      } else {
+        building.setItem(null);
+      }
+      building.nextMoveAt = time + this.scene.effectiveBeltIntervalMs();
     }
   }
 
@@ -319,7 +324,7 @@ export class FactorySystem {
     }
 
     source.removeStored(item);
-    source.nextMoveAt = time + this.scene.modifiers.beltIntervalMs;
+    source.nextMoveAt = time + this.scene.effectiveBeltIntervalMs();
     return true;
   }
 
@@ -457,11 +462,11 @@ export class FactorySystem {
     exit.setItem(
       item,
       this.scene.time.now,
-      this.scene.modifiers.beltIntervalMs,
+      this.scene.effectiveBeltIntervalMs(),
       incoming,
       this.pickItemOutputDirection(exit, item, incoming),
     );
-    exit.nextMoveAt = this.scene.time.now + this.scene.modifiers.beltIntervalMs;
+    exit.nextMoveAt = this.scene.time.now + this.scene.effectiveBeltIntervalMs();
     exit.flash(0x7ddcff);
     return true;
   }
@@ -508,11 +513,11 @@ export class FactorySystem {
       target.setItem(
         item,
         time,
-        this.scene.modifiers.beltIntervalMs,
+        this.scene.effectiveBeltIntervalMs(),
         incoming,
         this.pickItemOutputDirection(target, item, incoming),
       );
-      target.nextMoveAt = time + this.scene.modifiers.beltIntervalMs;
+      target.nextMoveAt = time + this.scene.effectiveBeltIntervalMs();
       return true;
     }
 
