@@ -9,7 +9,6 @@ import {
   ITEM_DEFS,
   ItemType,
   neighbor,
-  storageCapacity,
 } from '../types';
 import { GridSystem } from './GridSystem';
 
@@ -290,7 +289,13 @@ export class FactorySystem {
   }
 
   private updateConveyor(building: Building, time: number): void {
-    if (!building.item || time < building.nextMoveAt) {
+    if (!building.item) {
+      return;
+    }
+
+    this.refreshConveyorItemRoute(building);
+
+    if (time < building.nextMoveAt) {
       return;
     }
 
@@ -361,7 +366,12 @@ export class FactorySystem {
       return false;
     }
 
-    const planned = source.getItemOutputDirection();
+    const planned = this.pickItemOutputDirection(
+      source,
+      item,
+      source.getItemInputDirection(),
+    );
+    source.setItemOutputDirection(planned);
     const candidates = this.outputCandidates(outputs, source.nextOutputIndex, planned);
 
     for (const direction of candidates) {
@@ -515,6 +525,20 @@ export class FactorySystem {
     return false;
   }
 
+  private refreshConveyorItemRoute(source: Building): void {
+    if (source.type !== 'conveyor' || !source.item) {
+      return;
+    }
+
+    source.setItemOutputDirection(
+      this.pickItemOutputDirection(
+        source,
+        source.item,
+        source.getItemInputDirection(),
+      ),
+    );
+  }
+
   private pickItemOutputDirection(
     source: Building,
     item: ItemType,
@@ -527,7 +551,7 @@ export class FactorySystem {
 
     const candidates = this.rotatedOutputDirections(outputs, source.nextOutputIndex);
     return (
-      candidates.find((direction) => this.canEventuallyOutput(source, item, direction)) ??
+      candidates.find((direction) => this.canOutputNow(source, item, direction)) ??
       candidates[0] ??
       null
     );
@@ -545,7 +569,7 @@ export class FactorySystem {
     return outputs.map((_, offset) => outputs[(start + offset) % outputs.length]);
   }
 
-  private canEventuallyOutput(
+  private canOutputNow(
     source: Building,
     item: ItemType,
     direction: Direction,
@@ -561,10 +585,10 @@ export class FactorySystem {
     }
 
     if (target.type === 'conveyor') {
-      return this.canConveyorReceive(target, source.cell);
+      return !target.item && this.canConveyorReceive(target, source.cell);
     }
 
-    return storageCapacity(target.type, item) > 0;
+    return target.canStore(item);
   }
 
   private canConveyorReceive(target: Building, sourceCell?: Cell): boolean {

@@ -289,6 +289,10 @@ export class Building {
     return this.itemOutputDirection;
   }
 
+  setItemOutputDirection(direction: Direction | null): void {
+    this.itemOutputDirection = direction;
+  }
+
   flash(color = 0xffffff): void {
     this.sprite.setTint(color);
     this.container.scene.time.delayedCall(90, () => {
