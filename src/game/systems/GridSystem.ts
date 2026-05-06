@@ -222,7 +222,54 @@ export class GridSystem {
   }
 
   bestEnemyStep(from: Cell, target: Cell): Cell | null {
-    const candidates = this.neighbors(from)
+    if (from.x === target.x && from.y === target.y) {
+      return null;
+    }
+
+    const startKey = cellKey(from);
+    const targetKey = cellKey(target);
+    const queue: Cell[] = [{ ...from }];
+    const parents = new Map<string, string | null>([[startKey, null]]);
+    const cellsByKey = new Map<string, Cell>([[startKey, { ...from }]]);
+    let foundKey: string | null = null;
+
+    for (let index = 0; index < queue.length; index += 1) {
+      const current = queue[index];
+      const currentKey = cellKey(current);
+      if (currentKey === targetKey) {
+        foundKey = currentKey;
+        break;
+      }
+
+      const candidates = this.enemyStepCandidates(current, target);
+      for (const candidate of candidates) {
+        const key = cellKey(candidate);
+        if (parents.has(key)) {
+          continue;
+        }
+
+        parents.set(key, currentKey);
+        cellsByKey.set(key, candidate);
+        queue.push(candidate);
+      }
+    }
+
+    if (!foundKey) {
+      return this.greedyEnemyStep(from, target);
+    }
+
+    let cursorKey = foundKey;
+    let parentKey = parents.get(cursorKey) ?? null;
+    while (parentKey && parentKey !== startKey) {
+      cursorKey = parentKey;
+      parentKey = parents.get(cursorKey) ?? null;
+    }
+
+    return cellsByKey.get(cursorKey) ?? null;
+  }
+
+  private enemyStepCandidates(from: Cell, target: Cell): Cell[] {
+    return this.neighbors(from)
       .filter((cell) => this.isEnemyPassable(cell))
       .sort((a, b) => {
         const distance = manhattan(a, target) - manhattan(b, target);
@@ -232,8 +279,10 @@ export class GridSystem {
 
         return a.y - b.y || a.x - b.x;
       });
+  }
 
-    return candidates[0] ?? null;
+  private greedyEnemyStep(from: Cell, target: Cell): Cell | null {
+    return this.enemyStepCandidates(from, target)[0] ?? null;
   }
 
   randomSpawnCell(wave: number): Cell {
