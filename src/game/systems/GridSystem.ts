@@ -226,6 +226,18 @@ export class GridSystem {
       return null;
     }
 
+    return (
+      this.findEnemyStep(from, target, true) ??
+      this.findEnemyStep(from, target, false) ??
+      this.greedyEnemyStep(from, target)
+    );
+  }
+
+  private findEnemyStep(
+    from: Cell,
+    target: Cell,
+    avoidBuildings: boolean,
+  ): Cell | null {
     const startKey = cellKey(from);
     const targetKey = cellKey(target);
     const queue: Cell[] = [{ ...from }];
@@ -241,7 +253,7 @@ export class GridSystem {
         break;
       }
 
-      const candidates = this.enemyStepCandidates(current, target);
+      const candidates = this.enemyStepCandidates(current, target, avoidBuildings);
       for (const candidate of candidates) {
         const key = cellKey(candidate);
         if (parents.has(key)) {
@@ -255,7 +267,7 @@ export class GridSystem {
     }
 
     if (!foundKey) {
-      return this.greedyEnemyStep(from, target);
+      return null;
     }
 
     let cursorKey = foundKey;
@@ -268,9 +280,21 @@ export class GridSystem {
     return cellsByKey.get(cursorKey) ?? null;
   }
 
-  private enemyStepCandidates(from: Cell, target: Cell): Cell[] {
+  private enemyStepCandidates(
+    from: Cell,
+    target: Cell,
+    avoidBuildings = false,
+  ): Cell[] {
+    const targetKey = cellKey(target);
     return this.neighbors(from)
       .filter((cell) => this.isEnemyPassable(cell))
+      .filter((cell) => {
+        if (!avoidBuildings || cellKey(cell) === targetKey) {
+          return true;
+        }
+
+        return !this.getBuilding(cell)?.alive;
+      })
       .sort((a, b) => {
         const distance = manhattan(a, target) - manhattan(b, target);
         if (distance !== 0) {

@@ -1494,8 +1494,8 @@ export class GameScene extends Phaser.Scene {
       cell: { ...building.cell },
       direction: building.direction,
       conveyorVariant: building.conveyorVariant,
-      hp: building.type === 'core' ? building.maxHp : building.hp,
-      alive: building.type === 'core' ? true : building.alive,
+      hp: building.maxHp,
+      alive: true,
       item: building.item,
       storage,
     };
